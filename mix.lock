@@ -1,4 +1,5 @@
 %{
+  "heap": {:hex, :heap, "2.0.0", "2622fc8605e946156e9def52c63d53dfae2e6aa573bce5bf6a51e466fa53f2d1", [:mix], [], "hexpm"},
   "pqueue": {:hex, :pqueue, "1.7.3", "ed5dccf80a6b6778964b261f0fc504ab7ccedf71449466c49e942fa293c4d6ce", [:rebar3], [], "hexpm"},
   "pqueue2": {:hex, :pqueue2, "0.2.0", "9e0d96b87c3bb0f74f9d393e3d84edd2272794a2c904b240c862c8d4d801b624", [:mix], [{:pqueue, "~> 1.7", [hex: :pqueue, repo: "hexpm", optional: false]}], "hexpm"},
   "statistics": {:hex, :statistics, "0.5.1", "963c1d3a56d504a5559b469614203bcd366aac94e08515b61b3b239638ee8873", [:mix], [], "hexpm"},
