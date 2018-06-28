@@ -12,9 +12,9 @@ defmodule FilaSimulada do
   def get(queue) do
     case Agent.get_and_update(queue, &PQueue2.pop_with_priority(&1)) do
       {pid, prio} ->
-	{:reply, pid, prio}
+        {:reply, pid, prio}
       _ ->
-	:empty
+        :empty
     end
   end
 end
