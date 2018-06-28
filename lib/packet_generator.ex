@@ -40,17 +40,17 @@ defmodule PacketGenerator do
       # esperamos um request, e prontamente respondemos com o valor
       # previamente calculado
       {:request, caller} ->
-    send caller, {:reply, reply}
+	send caller, {:reply, reply}
 
-    # calculamos depois de responder (e antes da próxima requisição)
-    # para evitar atrasos desnecessários
-    next = generate_packet(ppf_time, ppf_size, reply.time)
-    loop(ppf_time, ppf_size, next)
+	# calculamos depois de responder (e antes da próxima requisição)
+	# para evitar atrasos desnecessários
+	next = generate_packet(ppf_time, ppf_size, reply.time)
+	loop(ppf_time, ppf_size, next)
 
       {:delay, delay} ->
-    # atrasamos a chegada do pacote
-    next = %Packet{reply | time: reply.time + delay}
-    loop(ppf_time, ppf_size, next)
+	# atrasamos a chegada do pacote
+	next = %Packet{reply | time: reply.time + delay}
+	loop(ppf_time, ppf_size, next)
     end
   end
 end
