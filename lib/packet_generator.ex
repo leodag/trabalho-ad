@@ -1,24 +1,28 @@
 defmodule PacketGenerator do
+  use GenServer
+
   # recebe duas ppf (inversa da cdf), uma para tamanho do pacote
   # e uma para incremento do tempo
   def start_link(opts) do
+    GenServer.start_link(__MODULE__, opts)
+  end
+
+
+  def init(opts) do
     ppf_time = Keyword.get(opts, :ppf_time, Distributions.constant(1))
     ppf_size = Keyword.get(opts, :ppf_size, Distributions.constant(1))
 
     # calculamos a chegada inicial
     reply = generate_packet(ppf_time, ppf_size, 0)
-    Task.start_link(fn -> loop(ppf_time, ppf_size, reply) end)
+    {:ok, {ppf_time, ppf_size, reply}}
   end
 
-  def get_packet(pid) do
-    send pid, {:request, self()}
-    receive do
-      {:reply, packet} -> packet
-    end
+  def get_packet(server) do
+    GenServer.call(server, :get_packet)
   end
 
-  def delay(pid, amount) do
-    send pid, {:delay, amount}
+  def delay(server, amount) do
+    GenServer.call(server, {:delay, amount})
   end
 
   # gera um numero na distribuição especificada
@@ -34,37 +38,40 @@ defmodule PacketGenerator do
     }
   end
 
-  # loop principal
-  defp loop(ppf_time, ppf_size, reply) do
-    receive do
-      # esperamos um request, e prontamente respondemos com o valor
-      # previamente calculado
-      {:request, caller} ->
-	send caller, {:reply, reply}
+  @impl
+  def handle_call(:get_packet, from, {ppf_time, ppf_size, reply}) do
+    GenServer.reply(from, reply)
 
-	# calculamos depois de responder (e antes da próxima requisição)
-	# para evitar atrasos desnecessários
-	next = generate_packet(ppf_time, ppf_size, reply.time)
-	loop(ppf_time, ppf_size, next)
+    # calculamos depois de responder (e antes da próxima requisição)
+    # para evitar atrasos desnecessários
+    next = generate_packet(ppf_time, ppf_size, reply.time)
 
-      {:delay, delay} ->
+    # noreply, porque ja respondemos antes
+    {:noreply, {ppf_time, ppf_size, next}}
+  end
+
+  @impl
+  def handle_call({:delay, amount}, from, {ppf_time, ppf_size, reply}) do
 	# atrasamos a chegada do pacote
-	next = %Packet{reply | time: reply.time + delay}
-	loop(ppf_time, ppf_size, next)
-    end
+	next = %Packet{reply | time: reply.time + amount}
+	{:reply, :ok, {ppf_time, ppf_size, next}}
   end
 end
 
 
 defmodule VoiceGenerator do
   def start_link(_opts) do
-    {:ok, pid} = PacketGenerator.start_link([
+    GenServer.start_link(__MODULE__, [])
+  end
+
+  def init([]) do
+    {:ok, packet_gen} = PacketGenerator.start_link([
       ppf_time: Distributions.constant(16_000),
       ppf_size: Distributions.constant(512),
     ])
     ppf_delay = Statistics.Distributions.Exponential.ppf(1/650_000)
 
-    Task.start_link(fn -> loop(pid, ppf_delay, 1/22) end)
+    {:ok, {packet_gen, ppf_delay, 1/22}}
   end
 
   # gera um numero na distribuição especificada
@@ -72,22 +79,20 @@ defmodule VoiceGenerator do
     ppf.(:rand.uniform())
   end
 
-  defp delay(pid, ppf_delay) do
+  defp delay(packet_gen, ppf_delay) do
     amount = generate_number(ppf_delay)
-    PacketGenerator.delay(pid, amount)
+    PacketGenerator.delay(packet_gen, amount)
   end
 
-  defp loop(pid, ppf_delay, delay_chance) do
-    receive do
-      {:request, caller} ->
-    send pid, {:request, caller}
-    end
+  @impl
+  def handle_call(:get_packet, from, {packet_gen, ppf_delay, delay_chance}) do
+    GenServer.reply(from, PacketGenerator.get_packet(packet_gen))
 
     if :rand.uniform() < delay_chance do
-      delay(pid, ppf_delay)
+      delay(packet_gen, ppf_delay)
     end
 
-    loop(pid, ppf_delay, delay_chance)
+    {:noreply, {packet_gen, ppf_delay, delay_chance}}
   end
 end
 
