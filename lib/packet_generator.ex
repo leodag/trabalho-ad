@@ -7,14 +7,14 @@ defmodule PacketGenerator do
     GenServer.start_link(__MODULE__, opts)
   end
 
-
   def init(opts) do
+    type = Keyword.get(opts, :type, :data)
     ppf_time = Keyword.get(opts, :ppf_time, Distributions.constant(1))
     ppf_size = Keyword.get(opts, :ppf_size, Distributions.constant(1))
 
     # calculamos a chegada inicial
-    reply = generate_packet(ppf_time, ppf_size, 0)
-    {:ok, {ppf_time, ppf_size, reply}}
+    reply = generate_packet(type, ppf_time, ppf_size, 0)
+    {:ok, {type, ppf_time, ppf_size, reply}}
   end
 
   def get_packet(server) do
@@ -31,45 +31,42 @@ defmodule PacketGenerator do
   end
 
   # gera uma chegada
-  defp generate_packet(ppf_time, ppf_size, prev_time) do
-    %Packet{time: prev_time + generate_number(ppf_time),
-        size: generate_number(ppf_size),
-        from: self()
-    }
+  defp generate_packet(type, ppf_time, ppf_size, prev_time) do
+    Packet.new(type,
+      prev_time + generate_number(ppf_time),
+      generate_number(ppf_size))
   end
 
-  @impl
-  def handle_call(:get_packet, from, {ppf_time, ppf_size, reply}) do
+  def handle_call(:get_packet, from, {type, ppf_time, ppf_size, reply}) do
     GenServer.reply(from, reply)
 
     # calculamos depois de responder (e antes da próxima requisição)
     # para evitar atrasos desnecessários
-    next = generate_packet(ppf_time, ppf_size, reply.time)
+    next = generate_packet(type, ppf_time, ppf_size, reply.time)
 
     # noreply, porque ja respondemos antes
-    {:noreply, {ppf_time, ppf_size, next}}
+    {:noreply, {type, ppf_time, ppf_size, next}}
   end
 
-  @impl
-  def handle_call({:delay, amount}, from, {ppf_time, ppf_size, reply}) do
-	# atrasamos a chegada do pacote
-	next = %Packet{reply | time: reply.time + amount}
-	{:reply, :ok, {ppf_time, ppf_size, next}}
+  def handle_call({:delay, amount}, _from, {type, ppf_time, ppf_size, reply}) do
+    # atrasamos a chegada do pacote
+    next = Packet.delay_arrival(reply, amount)
+    {:reply, :ok, {type, ppf_time, ppf_size, next}}
   end
 end
 
-
 defmodule VoiceGenerator do
   def start_link(_opts) do
-    GenServer.start_link(__MODULE__, [])
+    GenServer.start_link(__MODULE__, :ok)
   end
 
-  def init([]) do
+  def init(:ok) do
     {:ok, packet_gen} = PacketGenerator.start_link([
-      ppf_time: Distributions.constant(16_000),
+      type: :voice,
+      ppf_time: Distributions.constant(16),
       ppf_size: Distributions.constant(512),
     ])
-    ppf_delay = Statistics.Distributions.Exponential.ppf(1/650_000)
+    ppf_delay = Statistics.Distributions.Exponential.ppf(1/650)
 
     {:ok, {packet_gen, ppf_delay, 1/22}}
   end
@@ -84,7 +81,6 @@ defmodule VoiceGenerator do
     PacketGenerator.delay(packet_gen, amount)
   end
 
-  @impl
   def handle_call(:get_packet, from, {packet_gen, ppf_delay, delay_chance}) do
     GenServer.reply(from, PacketGenerator.get_packet(packet_gen))
 
@@ -99,6 +95,7 @@ end
 defmodule DataGenerator do
   def start_link(_opts) do
     PacketGenerator.start_link([
+      type: :data,
       ppf_time: Statistics.Distributions.Exponential.ppf(1),
       ppf_size: Distributions.data_size(),
     ])
