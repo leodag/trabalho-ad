@@ -1,7 +1,7 @@
 defmodule Server do
   use Agent
 
-  @transimisison_velocity 2000000
+  @transimission_velocity 2000000
 
   def initialize_server() do
     Agent.start_link(fn ->
@@ -38,7 +38,7 @@ defmodule Server do
   end
 
   defp time_to_serve_packet(packet) do
-    packet.size / @transimisison_velocity
+    packet.size / @transimission_velocity
   end
 
   defp update_packet(packet, now, arrival_time) do
