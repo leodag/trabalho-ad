@@ -1,6 +1,8 @@
 defmodule Server do
   use Agent
 
+  @transimisison_velocity 2000000
+
   def initialize_server() do
     Agent.start_link(fn ->
       %{}
@@ -16,10 +18,15 @@ defmodule Server do
     end)
   end
 
+  @doc """
+  adds the packet and returns the time it will take to serve it
+  """
   def add_packet(server, time, %Packet{}=packet) do
     Agent.update(server, fn(_) -> 
       Map.new([{:Packet, packet}, {:arrival_time, time}])
     end)
+
+    time_to_serve_packet(packet)
   end
 
   def remove_packet(server, now) do
@@ -28,6 +35,10 @@ defmodule Server do
         {update_packet(packet, now, Map.get(map, :arrival_time)), nil}
       end)
     end)
+  end
+
+  defp time_to_serve_packet(packet) do
+    packet.size / @transimisison_velocity
   end
 
   defp update_packet(packet, now, arrival_time) do

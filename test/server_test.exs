@@ -21,5 +21,10 @@ defmodule ServerTest do
       time: 100, size: 100, from: 1, time_on_server: 40
     }
   end
-    
+
+  test "calculates time to serve a packet" do
+    {:ok, server} = Server.initialize_server()
+    a = %Packet{time: 100, size: 1000, from: 1}
+    assert Server.add_packet(server, 100, a) === 0.0005
+  end
 end
