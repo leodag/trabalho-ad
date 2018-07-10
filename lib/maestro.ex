@@ -7,6 +7,13 @@ defmodule Maestro do
     voice_generator_count = Keyword.get(opts, :voice_generators, 1)
     data_generator_count = Keyword.get(opts, :data_generators, 1)
     preemptible = Keyword.get(opts, :preemptible, false)
+    bandwidth = Keyword.get(opts, :bandwidth, 2_000_000)
+    rho = Keyword.get(opts, :rho_percent, 10)
+
+    # 755 é o tamanho médio de um pacote calculado utilizando
+    # 0.3 * 64 + (Distributions.data_size_cdf(512) - 0.1 - 0.3) * 288 + 0.1 * 512
+    # + (0.7 - Distributions.data_size_cdf(512)) * 1006 + 0.3 * 1500
+    lambda = (bandwidth * rho / 100) / 755
 
     # Array de pids dos nossos geradores de voz
     voice_generators = for _ <- 1..voice_generator_count do
@@ -21,7 +28,7 @@ defmodule Maestro do
 
     # Realizamos o mesmo processo para os geradores de dados
     data_generators = for _ <- 1..data_generator_count do
-      {:ok, pid} = DataGenerator.start_link([])
+      {:ok, pid} = DataGenerator.start_link([lambda: lambda])
       pid
     end
 
@@ -30,7 +37,7 @@ defmodule Maestro do
     {:ok, voice_queue} = Queue.start_link([])
     {:ok, data_queue} = Queue.start_link([])
 
-    {:ok, server} = Server2.start_link([bandwidth: 2_000_000])
+    {:ok, server} = Server2.start_link([bandwidth: bandwidth])
 
     %Components{voice_source: voice_source,
                 data_source: data_source,
@@ -53,8 +60,10 @@ defmodule Maestro do
 
   # Esta função determina qual será a próxima ação tomada, de acordo com
   # os estados dos geradores, das filas e do servidor.
-  #def next_event(time, voice_arrival, data_arrival,
-  #voice_serve, data_serve, server_state)
+
+  # Assinatura legível da função:
+  # def next_event(time, voice_arrival, data_arrival,
+  # voice_serve, data_serve, server_state)
   # server_state = (:empty | {:serving, type, server_departure})
 
   # Servidor vazio, pacote de voz esperando
@@ -68,6 +77,8 @@ defmodule Maestro do
   when data_serve < t do
     :data_serve
   end
+
+  #def next_event(t, _v_a, _d_a, _v_s, _d_s, {:serving, s_d, :data}, true) when v_s < resto
 
   # Servidor vazio, nenhum pacote esperando: pulamos para o próximo
   # momento no qual acontecerá algo
@@ -95,7 +106,7 @@ defmodule Maestro do
   end
 
   def loop(time, components = %Components{}) do
-    IO.puts time
+    IO.puts to_string(time) <> " v_q:" <> to_string(Queue.len(components.voice_queue)) <> " d_q:" <> to_string(Queue.len(components.data_queue))
 
     voice_arrival = PacketGenerator.next_time(components.voice_source)
     data_arrival = PacketGenerator.next_time(components.data_source)

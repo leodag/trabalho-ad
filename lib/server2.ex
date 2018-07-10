@@ -23,19 +23,27 @@ defmodule Server2 do
   end
 
   def handle_call({:begin_serve, time, type, packet = %Packet{}}, _from, {bandwidth, :empty}) do
-    serve_end = time + packet.size/bandwidth
-    {:reply, :ok, {bandwidth, {:serving, serve_end, type, packet}}}
+    serve_end = time + packet.size / bandwidth
+    {:reply, :ok, {bandwidth, {:serving, time, serve_end, type, packet}}}
   end
 
-  def handle_call(:end_serve, _from, {bandwidth, {:serving, _serve_end, _type, _packet}}) do
-    {:reply, :ok, {bandwidth, :empty}}
+  def handle_call({:interrupt_serve, time}, _from, {bandwidth, {:serving, serve_start, _serve_end}}) do
+
+  end
+
+  def handle_call(:end_serve, _from, {bandwidth, {:serving, serve_start, serve_end, _type, packet}}) do
+    {:reply, add_serve_time(packet, serve_start, serve_end), {bandwidth, :empty}}
   end
 
   def handle_call(:status, _from, state = {_bandwidth, :empty}) do
     {:reply, :empty, state}
   end
 
-  def handle_call(:status, _from, state = {_bandwidth, {:serving, serve_end, type, _packet}}) do
+  def handle_call(:status, _from, state = {_bandwidth, {:serving, _serve_start, serve_end, type, _packet}}) do
     {:reply, {:serving, serve_end, type}, state}
+  end
+
+  defp add_serve_time(packet, serve_start, time) do
+    %{packet | time_on_server: packet.time_on_server + time - serve_start}
   end
 end
