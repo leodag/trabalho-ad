@@ -1,12 +1,25 @@
 defmodule PacketGenerator do
   use GenServer
 
+  defstruct [:ppf_time, :ppf_size, :reply]
+
   # recebe duas ppf (inversa da cdf), uma para tamanho do pacote
   # e uma para incremento do tempo
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts)
   end
 
+  def get_packet(server) do
+    GenServer.call(server, :get_packet)
+  end
+
+  def next_time(server) do
+    GenServer.call(server, :next_time)
+  end
+
+  def delay(server, amount) do
+    GenServer.call(server, {:delay, amount})
+  end
 
   def init(opts) do
     ppf_time = Keyword.get(opts, :ppf_time, Distributions.constant(1))
@@ -14,15 +27,9 @@ defmodule PacketGenerator do
 
     # calculamos a chegada inicial
     reply = generate_packet(ppf_time, ppf_size, 0)
-    {:ok, {ppf_time, ppf_size, reply}}
-  end
-
-  def get_packet(server) do
-    GenServer.call(server, :get_packet)
-  end
-
-  def delay(server, amount) do
-    GenServer.call(server, {:delay, amount})
+    {:ok, %PacketGenerator{ppf_time: ppf_time,
+                           ppf_size: ppf_size,
+                           reply: reply}}
   end
 
   # gera um numero na distribuição especificada
@@ -38,40 +45,50 @@ defmodule PacketGenerator do
     }
   end
 
-  @impl
-  def handle_call(:get_packet, from, {ppf_time, ppf_size, reply}) do
-    GenServer.reply(from, reply)
+  def handle_call(:get_packet, from, state = %PacketGenerator{}) do
+    GenServer.reply(from, state.reply)
 
     # calculamos depois de responder (e antes da próxima requisição)
     # para evitar atrasos desnecessários
-    next = generate_packet(ppf_time, ppf_size, reply.time)
+    next = generate_packet(state.ppf_time, state.ppf_size, state.reply.time)
 
     # noreply, porque ja respondemos antes
-    {:noreply, {ppf_time, ppf_size, next}}
+    {:noreply, %{state | reply: next}}
   end
 
-  @impl
-  def handle_call({:delay, amount}, from, {ppf_time, ppf_size, reply}) do
+  def handle_call(:next_time, _from, state = %PacketGenerator{reply: next}) do
+    {:reply, next.time, state}
+  end
+
+  def handle_call({:delay, amount}, _from, state = %PacketGenerator{}) do
 	# atrasamos a chegada do pacote
-	next = %Packet{reply | time: reply.time + amount}
-	{:reply, :ok, {ppf_time, ppf_size, next}}
+	next = %Packet{state.reply | time: state.reply.time + amount}
+	{:reply, :ok, %{state | reply: next}}
   end
 end
 
-
 defmodule VoiceGenerator do
+  use GenServer
+
+  defstruct [:packet_gen, :ppf_delay, :delay_chance]
+
   def start_link(_opts) do
     GenServer.start_link(__MODULE__, [])
   end
 
   def init([]) do
     {:ok, packet_gen} = PacketGenerator.start_link([
-      ppf_time: Distributions.constant(16_000),
+      ppf_time: Distributions.constant(0.016), # 16 ms
       ppf_size: Distributions.constant(512),
     ])
-    ppf_delay = Statistics.Distributions.Exponential.ppf(1/650_000)
+    ppf_delay = Statistics.Distributions.Exponential.ppf(1/0.650) # media: 650 ms
 
-    {:ok, {packet_gen, ppf_delay, 1/22}}
+    # atraso inicial
+    delay(packet_gen, ppf_delay)
+
+    {:ok, %VoiceGenerator{packet_gen: packet_gen,
+			  ppf_delay: ppf_delay,
+			  delay_chance: 1/22}}
   end
 
   # gera um numero na distribuição especificada
@@ -84,15 +101,20 @@ defmodule VoiceGenerator do
     PacketGenerator.delay(packet_gen, amount)
   end
 
-  @impl
-  def handle_call(:get_packet, from, {packet_gen, ppf_delay, delay_chance}) do
-    GenServer.reply(from, PacketGenerator.get_packet(packet_gen))
+  def handle_call(:get_packet, from, state = %VoiceGenerator{}) do
+    # substitui o campo from para o pid deste processo
+    reply = %{PacketGenerator.get_packet(state.packet_gen) | from: self()}
+    GenServer.reply(from, reply)
 
-    if :rand.uniform() < delay_chance do
-      delay(packet_gen, ppf_delay)
+    if :rand.uniform() < state.delay_chance do
+      delay(state.packet_gen, state.ppf_delay)
     end
 
-    {:noreply, {packet_gen, ppf_delay, delay_chance}}
+    {:noreply, state}
+  end
+
+  def handle_call(:next_time, _from, state = %VoiceGenerator{}) do
+    {:reply, PacketGenerator.next_time(state.packet_gen)}
   end
 end
 
