@@ -6,6 +6,7 @@ defmodule Maestro do
   def init(opts) do
     voice_generator_count = Keyword.get(opts, :voice_generators, 1)
     data_generator_count = Keyword.get(opts, :data_generators, 1)
+    preemptible = Keyword.get(opts, :preemptible, false)
 
     # Array de pids dos nossos geradores de voz
     voice_generators = for _ <- 1..voice_generator_count do
@@ -35,7 +36,8 @@ defmodule Maestro do
                 data_source: data_source,
                 voice_queue: voice_queue,
                 data_queue: data_queue,
-                server: server}
+                server: server,
+		preemptible: preemptible}
   end
 
   def maestro(opts) do
@@ -56,20 +58,20 @@ defmodule Maestro do
   # server_state = (:empty | {:serving, type, server_departure})
 
   # Servidor vazio, pacote de voz esperando
-  def next_event(t, _v_a, _d_a, voice_serve, _d_s, :empty)
+  def next_event(t, _v_a, _d_a, voice_serve, _d_s, :empty, _p)
   when voice_serve < t do
     :voice_serve
   end
 
   # Servidor vazio, pacote de dados esperando
-  def next_event(t, _v_a, _d_a, _v_s, data_serve, :empty)
+  def next_event(t, _v_a, _d_a, _v_s, data_serve, :empty, _p)
   when data_serve < t do
     :data_serve
   end
 
   # Servidor vazio, nenhum pacote esperando: pulamos para o próximo
   # momento no qual acontecerá algo
-  def next_event(_t, v_a, d_a, v_s, d_s, :empty) do
+  def next_event(_t, v_a, d_a, v_s, d_s, :empty, _p) do
     next_time = min_v([v_a, d_a, v_s, d_s])
 
     cond do
@@ -81,7 +83,7 @@ defmodule Maestro do
   end
 
   # Servidor ocupado: não podemos começar a servir
-  def next_event(_t, v_a, d_a, _v_s, _d_s, {:serving, s_d, type}) do
+  def next_event(_t, v_a, d_a, _v_s, _d_s, {:serving, s_d, type}, _p) do
     next_time = min_v([v_a, d_a, s_d])
 
     cond do
@@ -104,7 +106,7 @@ defmodule Maestro do
     server_state = Server2.status(components.server)
 
     next_event = next_event(time, voice_arrival, data_arrival,
-      voice_serve, data_serve, server_state)
+      voice_serve, data_serve, server_state, components.preemptible)
 
     case next_event do
       :voice_arrival ->
@@ -140,16 +142,17 @@ defmodule Maestro do
 
   def arrival(source, queue) do
     packet = PacketGenerator.get_packet(source)
+    packet = %{packet | last_queue_arrival: packet.time}
     Queue.put(queue, packet)
   end
 
   def voice_serve(time, queue, server) do
-    {:value, packet} = Queue.get(queue)
+    {:value, packet} = Queue.get(queue, time)
     Server2.begin_serve(server, time, :voice, packet)
   end
 
   def data_serve(time, queue, server) do
-    {:value, packet} = Queue.get(queue)
+    {:value, packet} = Queue.get(queue, time)
     Server2.begin_serve(server, time, :data, packet)
   end
 

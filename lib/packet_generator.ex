@@ -40,8 +40,8 @@ defmodule PacketGenerator do
   # gera uma chegada
   defp generate_packet(ppf_time, ppf_size, prev_time) do
     %Packet{time: prev_time + generate_number(ppf_time),
-        size: generate_number(ppf_size),
-        from: self()
+            size: generate_number(ppf_size),
+            from: self()
     }
   end
 
