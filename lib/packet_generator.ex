@@ -119,10 +119,13 @@ defmodule VoiceGenerator do
 end
 
 defmodule DataGenerator do
-  def start_link(_opts) do
+  def start_link(opts) do
+    # default: rho = 10% de 2Mbps
+    lambda = Keyword.get(opts, :lambda, 264.9)
+
     PacketGenerator.start_link([
-      ppf_time: Statistics.Distributions.Exponential.ppf(1),
-      ppf_size: Distributions.data_size(),
+      ppf_time: Statistics.Distributions.Exponential.ppf(lambda),
+      ppf_size: &Distributions.data_size_ppf/1,
     ])
   end
 end
