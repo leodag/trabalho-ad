@@ -1,8 +1,8 @@
 defmodule HeapPacketQueue do
   use GenServer
 
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts)
+  def start_link(opts, gs_opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, gs_opts)
   end
 
   def init(opts) do
