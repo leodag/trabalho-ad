@@ -38,26 +38,4 @@ defmodule AverageNumberCalcTest do
 
     assert GenServer.call(pid, :mean) === 1.6666666666666667
   end
-
-  test "Getting std deviation" do
-    {:ok, pid} = GenServer.start_link(AverageNumberCalc, {})
-
-    GenServer.cast(pid, {:value, 1, 1})
-    GenServer.cast(pid, {:value, 2, 3})
-
-    assert GenServer.call(pid, :mean) === 1.6666666666666667
-    assert GenServer.call(pid, :std_deviation) === 5.634713834792322
-  end
-  #
-  # test "Getting confidence interval" do
-  #   {:ok, pid} = GenServer.start_link(AverageNumberCalc, {})
-  #
-  #   GenServer.cast(pid, {:value, 20})
-  #   GenServer.cast(pid, {:value, 10.5})
-  #   GenServer.cast(pid, {:value, 10})
-  #
-  #   assert GenServer.call(pid, :interval) === {8.148480161362258, 18.851519838637742}
-  # end
-  #
-  #
 end
