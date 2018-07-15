@@ -14,6 +14,10 @@ defmodule Server2 do
     GenServer.call(server, {:begin_serve, serve_start, type, packet})
   end
 
+  def interrupt_serve(server, time) do
+    GenServer.call(server, {:interrupt_serve, time})
+  end
+
   def end_serve(server) do
     GenServer.call(server, :end_serve)
   end
