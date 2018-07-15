@@ -70,13 +70,15 @@ end
 defmodule VoiceGenerator do
   use GenServer
 
-  defstruct [:packet_gen, :ppf_delay, :delay_chance]
+  defstruct [:packet_gen, :ppf_delay, :delay_chance, :generator_id, :first_in_period]
 
   def start_link(opts, gs_opts \\ []) do
     GenServer.start_link(__MODULE__, opts, gs_opts)
   end
 
-  def init(_opts) do
+  def init(opts) do
+    generator_id = Keyword.get(opts, :generator_id, 0)
+
     {:ok, packet_gen} = PacketGenerator.start_link([
       ppf_time: Distributions.constant(0.016), # 16 ms
       ppf_size: Distributions.constant(512),
@@ -86,9 +88,14 @@ defmodule VoiceGenerator do
     # atraso inicial
     delay(packet_gen, ppf_delay)
 
-    {:ok, %VoiceGenerator{packet_gen: packet_gen,
-              ppf_delay: ppf_delay,
-              delay_chance: 1/22}}
+    {
+      :ok,
+      %VoiceGenerator{packet_gen: packet_gen,
+		      generator_id: generator_id,
+		      first_in_period: PacketGenerator.next_time(packet_gen),
+		      ppf_delay: ppf_delay,
+		      delay_chance: 1/22}
+    }
   end
 
   # gera um numero na distribuição especificada
@@ -101,16 +108,26 @@ defmodule VoiceGenerator do
     PacketGenerator.delay(packet_gen, amount)
   end
 
-  def handle_call(:get_packet, from, state = %VoiceGenerator{}) do
-    # substitui o campo from para o pid deste processo
-    reply = %{PacketGenerator.get_packet(state.packet_gen) | from: self()}
-    GenServer.reply(from, reply)
+  def handle_call(:get_packet, _from, state = %VoiceGenerator{}) do
+    # substitui o campo from para o pid deste processo e identifica o gerador
+    reply =
+      %{
+	PacketGenerator.get_packet(state.packet_gen) |
+	from: self(),
+	generator_id: state.generator_id,
+	first_in_period: state.first_in_period
+      }
 
-    if :rand.uniform() < state.delay_chance do
-      delay(state.packet_gen, state.ppf_delay)
-    end
+    {reply, state} =
+      if :rand.uniform() < state.delay_chance do
+	re = %{reply | last: true}
+	delay(state.packet_gen, state.ppf_delay)
+	{re, %{state | first_in_period: PacketGenerator.next_time(state.packet_gen)}}
+      else
+	{reply, state}
+      end
 
-    {:noreply, state}
+    {:reply, reply, state}
   end
 
   def handle_call(:next_time, _from, state = %VoiceGenerator{}) do

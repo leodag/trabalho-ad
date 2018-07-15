@@ -10,7 +10,9 @@ end
 
 defmodule Packet do
   @enforce_keys [:time, :size, :from]
-  defstruct [:time, :size, :from, {:time_on_server, 0}, {:time_on_queue, 0}, :last_queue_arrival]
+  defstruct [:time, :size, :from,
+	     {:time_on_server, 0}, {:time_on_queue, 0}, :last_queue_arrival,
+	     {:last, false}, {:generator_id, 0}, :first_in_period]
 end
 
 defmodule Components do
