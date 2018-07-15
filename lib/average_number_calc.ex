@@ -6,6 +6,7 @@ defmodule AverageNumberCalc do
   defstruct(
     partial_sum_area: 0,
     partial_sum_squares: 0,
+    count: 0,
     time: 0,
     last_entry: 0
   )
@@ -30,10 +31,10 @@ defmodule AverageNumberCalc do
     {:reply, mean(struct), struct}
   end
 
-  # @impl true
-  # def handle_call(:std_deviation, _from, struct) do
-  #   {:reply, std_deviation(struct), struct}
-  # end
+  @impl true
+  def handle_call(:std_deviation, _from, struct) do
+    {:reply, std_deviation(struct), struct}
+  end
   #
   # def handle_call(:interval, _from, struct) do
   #   {:reply, interval(struct), struct}
@@ -46,6 +47,7 @@ defmodule AverageNumberCalc do
     updated_struct = %AverageNumberCalc{
       partial_sum_area: struct.partial_sum_area + area,
       partial_sum_squares: struct.partial_sum_squares + :math.pow(area, 2),
+      count: struct.count + 1,
       time: struct.time + time_delta,
       last_entry: time
     }
@@ -65,15 +67,15 @@ defmodule AverageNumberCalc do
     end
     struct.partial_sum_area / struct.time
   end
-  #
-  # defp std_deviation(struct) do
-  #   :math.sqrt(variance(struct))
-  # end
-  #
-  # defp variance(struct) do
-  #   partial_sum_squares = struct.partial_sum_squares / (struct.count - 1)
-  #   square_of_sum = :math.pow(struct.partial_sum, 2) / (struct.count * (struct.count - 1))
-  #   partial_sum_squares - square_of_sum
-  # end
+
+  defp std_deviation(struct) do
+    :math.sqrt(variance(struct))
+  end
+
+  defp variance(struct) do
+    partial_sum_squares = struct.partial_sum_squares / (struct.count - 1)
+    square_of_sum = :math.pow(struct.partial_sum_area, 2) / (struct.count * (struct.count - 1))
+    partial_sum_squares - square_of_sum
+  end
 end
 

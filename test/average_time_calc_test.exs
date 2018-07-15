@@ -5,19 +5,22 @@ defmodule AverageTimeCalcTest do
     {:ok, _} = GenServer.start_link(AverageTimeCalc, {})
   end
 
-  test "Initial values of count is correct" do
+  setup do
     {:ok, pid} = GenServer.start_link(AverageTimeCalc, {})
+
+    {:ok, pid: pid}
+  end
+    
+
+  test "Initial values of count is correct", %{pid: pid} do
     assert GenServer.call(pid, :count) === 0
   end
 
-  test "Initial values of partial_sum is correct" do
-    {:ok, pid} = GenServer.start_link(AverageTimeCalc, {})
+  test "Initial values of partial_sum is correct", %{pid: pid} do
     assert GenServer.call(pid, :partial_sum) === 0
   end
 
-  test "Adding values to the calc" do
-    {:ok, pid} = GenServer.start_link(AverageTimeCalc, {})
-
+  test "Adding values to the calc", %{pid: pid} do
     GenServer.cast(pid, {:value, 20})
 
     assert GenServer.call(pid, :partial_sum) === 20
@@ -29,18 +32,14 @@ defmodule AverageTimeCalcTest do
     assert GenServer.call(pid, :count) === 2
   end
 
-  test "Getting avarega time" do
-    {:ok, pid} = GenServer.start_link(AverageTimeCalc, {})
-
+  test "Getting avarega time", %{pid: pid} do
     GenServer.cast(pid, {:value, 20})
     GenServer.cast(pid, {:value, 10.5})
 
     assert GenServer.call(pid, :mean) === 15.25
   end
 
-  test "Getting std deviation" do
-    {:ok, pid} = GenServer.start_link(AverageTimeCalc, {})
-
+  test "Getting std deviation", %{pid: pid} do
     GenServer.cast(pid, {:value, 20})
     GenServer.cast(pid, {:value, 10.5})
     GenServer.cast(pid, {:value, 10})
@@ -49,9 +48,7 @@ defmodule AverageTimeCalcTest do
     assert GenServer.call(pid, :std_deviation) === 5.634713834792322
   end
 
-  test "Getting confidence interval" do
-    {:ok, pid} = GenServer.start_link(AverageTimeCalc, {})
-
+  test "Getting confidence interval", %{pid: pid} do
     GenServer.cast(pid, {:value, 20})
     GenServer.cast(pid, {:value, 10.5})
     GenServer.cast(pid, {:value, 10})
