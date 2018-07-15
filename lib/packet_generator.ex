@@ -5,8 +5,8 @@ defmodule PacketGenerator do
 
   # recebe duas ppf (inversa da cdf), uma para tamanho do pacote
   # e uma para incremento do tempo
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts)
+  def start_link(opts, gs_opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, gs_opts)
   end
 
   def get_packet(server) do
@@ -61,9 +61,9 @@ defmodule PacketGenerator do
   end
 
   def handle_call({:delay, amount}, _from, state = %PacketGenerator{}) do
-	# atrasamos a chegada do pacote
-	next = %Packet{state.reply | time: state.reply.time + amount}
-	{:reply, :ok, %{state | reply: next}}
+    # atrasamos a chegada do pacote
+    next = %Packet{state.reply | time: state.reply.time + amount}
+    {:reply, :ok, %{state | reply: next}}
   end
 end
 
@@ -72,11 +72,11 @@ defmodule VoiceGenerator do
 
   defstruct [:packet_gen, :ppf_delay, :delay_chance]
 
-  def start_link(_opts) do
-    GenServer.start_link(__MODULE__, [])
+  def start_link(opts, gs_opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, gs_opts)
   end
 
-  def init([]) do
+  def init(_opts) do
     {:ok, packet_gen} = PacketGenerator.start_link([
       ppf_time: Distributions.constant(0.016), # 16 ms
       ppf_size: Distributions.constant(512),
@@ -87,8 +87,8 @@ defmodule VoiceGenerator do
     delay(packet_gen, ppf_delay)
 
     {:ok, %VoiceGenerator{packet_gen: packet_gen,
-			  ppf_delay: ppf_delay,
-			  delay_chance: 1/22}}
+              ppf_delay: ppf_delay,
+              delay_chance: 1/22}}
   end
 
   # gera um numero na distribuição especificada

@@ -4,7 +4,7 @@ defmodule Maestro do
   end
 
   def init(opts) do
-    voice_generator_count = Keyword.get(opts, :voice_generators, 1)
+    voice_generator_count = Keyword.get(opts, :voice_generators, 30)
     data_generator_count = Keyword.get(opts, :data_generators, 1)
     preemptible = Keyword.get(opts, :preemptible, false)
     bandwidth = Keyword.get(opts, :bandwidth, 2_000_000)
@@ -13,38 +13,35 @@ defmodule Maestro do
     # 755 é o tamanho médio de um pacote calculado utilizando
     # 0.3 * 64 + (Distributions.data_size_cdf(512) - 0.1 - 0.3) * 288 + 0.1 * 512
     # + (0.7 - Distributions.data_size_cdf(512)) * 1006 + 0.3 * 1500
-    lambda = (bandwidth * rho / 100) / 755
+    lambda_data = (bandwidth * rho / 100) / 755
 
     # Array de pids dos nossos geradores de voz
-    voice_generators = for _ <- 1..voice_generator_count do
-      {:ok, pid} = VoiceGenerator.start_link([])
-      pid
-    end
+    voice_generators =
+      for _ <- 1..voice_generator_count do
+        {:ok, pid} = VoiceGenerator.start_link([])
+        pid
+      end
 
     # Utilizamos o voice_queue como "funil" para tratarmos todoso nossos geradores
     # de pacotes como um só - dele, sempre recebemos o próximo evento dentre todos
     # os geradores.
-    {:ok, voice_source} = HeapPacketQueue.start_link([generators: voice_generators])
+    {:ok, _} = HeapPacketQueue.start_link([generators: voice_generators], name: VoiceSource)
 
     # Realizamos o mesmo processo para os geradores de dados
-    data_generators = for _ <- 1..data_generator_count do
-      {:ok, pid} = DataGenerator.start_link([lambda: lambda])
-      pid
-    end
+    data_generators =
+      for _ <- 1..data_generator_count do
+	{:ok, pid} = DataGenerator.start_link([lambda: lambda_data])
+	pid
+      end
 
-    {:ok, data_source} = HeapPacketQueue.start_link([generators: data_generators])
+    {:ok, _} = HeapPacketQueue.start_link([generators: data_generators], name: DataSource)
 
-    {:ok, voice_queue} = Queue.start_link([])
-    {:ok, data_queue} = Queue.start_link([])
+    {:ok, _} = Queue.start_link([], name: VoiceQueue)
+    {:ok, _} = Queue.start_link([], name: DataQueue)
 
-    {:ok, server} = Server2.start_link([bandwidth: bandwidth])
+    {:ok, _} = Server2.start_link([bandwidth: bandwidth], name: Server)
 
-    %Components{voice_source: voice_source,
-                data_source: data_source,
-                voice_queue: voice_queue,
-                data_queue: data_queue,
-                server: server,
-		preemptible: preemptible}
+    preemptible
   end
 
   def maestro(opts) do
@@ -105,50 +102,51 @@ defmodule Maestro do
     end
   end
 
-  def loop(time, components = %Components{}) do
-    IO.puts to_string(time) <> " v_q:" <> to_string(Queue.len(components.voice_queue)) <> " d_q:" <> to_string(Queue.len(components.data_queue))
+  def loop(time, preemptible) do
+    IO.puts to_string(time) <> " v_q:" <> to_string(Queue.len(VoiceQueue)) <> " d_q:" <> to_string(Queue.len(DataQueue))
 
-    voice_arrival = PacketGenerator.next_time(components.voice_source)
-    data_arrival = PacketGenerator.next_time(components.data_source)
+    voice_arrival = PacketGenerator.next_time(VoiceSource)
+    data_arrival = PacketGenerator.next_time(DataSource)
 
-    voice_serve = Queue.next_time(components.voice_queue)
-    data_serve = Queue.next_time(components.data_queue)
+    voice_serve = Queue.next_time(VoiceQueue)
+    data_serve = Queue.next_time(DataQueue)
 
-    server_state = Server2.status(components.server)
+    server_state = Server2.status(Server)
 
     next_event = next_event(time, voice_arrival, data_arrival,
-      voice_serve, data_serve, server_state, components.preemptible)
+      voice_serve, data_serve, server_state, preemptible)
 
     case next_event do
       :voice_arrival ->
 	IO.puts "v_a"
-	arrival(components.voice_source, components.voice_queue)
-	loop(voice_arrival, components)
+	arrival(VoiceSource, VoiceQueue)
+	voice_arrival
       :data_arrival ->
 	IO.puts "d_a"
-	arrival(components.data_source, components.data_queue)
-	loop(data_arrival, components)
+	arrival(DataSource, DataQueue)
+	data_arrival
       :voice_serve ->
 	IO.puts "v_s"
 	serve_start = max(voice_serve, time)
-	voice_serve(serve_start, components.voice_queue, components.server)
-	loop(voice_serve, components)
+	voice_serve(serve_start, VoiceQueue, Server)
+	voice_serve
       :data_serve ->
 	IO.puts "d_s"
 	serve_start = max(data_serve, time)
-	data_serve(serve_start, components.data_queue, components.server)
-	loop(data_serve, components)
+	data_serve(serve_start, DataQueue, Server)
+	data_serve
       :voice_departure ->
 	IO.puts "v_d"
 	{:serving, serve_end, :voice} = server_state
-	voice_departure(components.server)
-	loop(serve_end, components)
+	voice_departure(Server)
+	serve_end
       :data_departure ->
 	IO.puts "d_d"
 	{:serving, serve_end, :data} = server_state
-	data_departure(components.server)
-	loop(serve_end, components)
+	data_departure(Server)
+	serve_end
     end
+    |> loop(preemptible)
   end
 
   def arrival(source, queue) do
@@ -168,10 +166,10 @@ defmodule Maestro do
   end
 
   def voice_departure(server) do
-    Server2.end_serve(server)
+    packet = Server2.end_serve(server)
   end
 
   def data_departure(server) do
-    Server2.end_serve(server)
+    packet = Server2.end_serve(server)
   end
 end

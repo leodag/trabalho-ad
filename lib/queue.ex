@@ -1,8 +1,8 @@
 defmodule Queue do
   use Agent
 
-  def start_link(_opts) do
-    Agent.start_link(&:queue.new/0)
+  def start_link(_opts, gs_opts \\ []) do
+    Agent.start_link(&:queue.new/0, gs_opts)
   end
 
   def put(queue, item = %Packet{}) do

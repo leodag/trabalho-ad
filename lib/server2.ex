@@ -1,8 +1,8 @@
 defmodule Server2 do
   use GenServer
 
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts)
+  def start_link(opts, gs_opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, gs_opts)
   end
 
   def init(opts) do
@@ -24,15 +24,28 @@ defmodule Server2 do
 
   def handle_call({:begin_serve, time, type, packet = %Packet{}}, _from, {bandwidth, :empty}) do
     serve_end = time + packet.size / bandwidth
-    {:reply, :ok, {bandwidth, {:serving, time, serve_end, type, packet}}}
+
+    {
+      :reply,
+      :ok,
+      {bandwidth, {:serving, time, serve_end, type, packet}}
+    }
   end
 
-  def handle_call({:interrupt_serve, time}, _from, {bandwidth, {:serving, serve_start, _serve_end}}) do
-
+  def handle_call({:interrupt_serve, time}, _from, {bandwidth, {:serving, serve_start, _serve_end, _type, packet}}) do
+    {
+      :reply,
+      add_serve_time(packet, serve_start, time),
+      {bandwidth, :empty}
+    }
   end
 
   def handle_call(:end_serve, _from, {bandwidth, {:serving, serve_start, serve_end, _type, packet}}) do
-    {:reply, add_serve_time(packet, serve_start, serve_end), {bandwidth, :empty}}
+    {
+      :reply,
+      add_serve_time(packet, serve_start, serve_end),
+      {bandwidth, :empty}
+    }
   end
 
   def handle_call(:status, _from, state = {_bandwidth, :empty}) do
