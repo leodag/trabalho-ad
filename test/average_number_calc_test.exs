@@ -2,15 +2,19 @@ defmodule AverageNumberCalcTest do
   use ExUnit.Case, async: true
 
   test "create a average number calculator" do
-    {:ok, _} = GenServer.start_link(AverageNumberCalc, {})
+    {:ok, _} = GenServer.start_link(AverageNumberCalc, 0)
+  end
+
+  test "Initial values of time is correct different from zero" do
+    {:ok, pid} = GenServer.start_link(AverageNumberCalc, 120.129312)
+    assert GenServer.call(pid, :time) === 120.129312
   end
 
   setup do
-    {:ok, pid} = GenServer.start_link(AverageNumberCalc, {})
+    {:ok, pid} = GenServer.start_link(AverageNumberCalc, 0)
 
     {:ok, pid: pid}
   end
-
 
   test "Initial values of time is correct", %{pid: pid} do
     assert GenServer.call(pid, :time) === 0

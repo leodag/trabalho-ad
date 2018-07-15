@@ -12,8 +12,8 @@ defmodule AverageNumberCalc do
   )
 
   @impl true
-  def init(_) do
-    {:ok, %AverageNumberCalc{}}
+  def init(time) do
+    {:ok, %AverageNumberCalc{time: time}}
   end
 
   @impl true

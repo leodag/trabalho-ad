@@ -56,10 +56,10 @@ defmodule AverageTimeCalc do
   end
 
   defp mean(struct) do
-    if struct.count === 0 do
-      0
+    case struct.count do
+      0 -> 0
+      _ -> struct.partial_sum / struct.count
     end
-    struct.partial_sum / struct.count
   end
 
   defp std_deviation(struct) do
