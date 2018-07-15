@@ -121,7 +121,7 @@ defmodule Maestro do
     end
   end
 
-  def loop(time, preemptible) do
+  def loop(time, preemptible) when is_number(time) and is_boolean(preemptible) do
     IO.puts to_string(time) <> " v_q:" <> to_string(Queue.len(VoiceQueue)) <> " d_q:" <> to_string(Queue.len(DataQueue))
 
     voice_arrival = PacketGenerator.next_time(VoiceSource)
