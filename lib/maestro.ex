@@ -6,6 +6,14 @@ defmodule Maestro do
   def init(opts) do
     voice_generator_count = Keyword.get(opts, :voice_generators, 1)
     data_generator_count = Keyword.get(opts, :data_generators, 1)
+    preemptible = Keyword.get(opts, :preemptible, false)
+    bandwidth = Keyword.get(opts, :bandwidth, 2_000_000)
+    rho = Keyword.get(opts, :rho_percent, 10)
+
+    # 755 é o tamanho médio de um pacote calculado utilizando
+    # 0.3 * 64 + (Distributions.data_size_cdf(512) - 0.1 - 0.3) * 288 + 0.1 * 512
+    # + (0.7 - Distributions.data_size_cdf(512)) * 1006 + 0.3 * 1500
+    lambda = (bandwidth * rho / 100) / 755
 
     # Array de pids dos nossos geradores de voz
     voice_generators = for _ <- 1..voice_generator_count do
@@ -20,7 +28,7 @@ defmodule Maestro do
 
     # Realizamos o mesmo processo para os geradores de dados
     data_generators = for _ <- 1..data_generator_count do
-      {:ok, pid} = DataGenerator.start_link([])
+      {:ok, pid} = DataGenerator.start_link([lambda: lambda])
       pid
     end
 
@@ -29,13 +37,14 @@ defmodule Maestro do
     {:ok, voice_queue} = Queue.start_link([])
     {:ok, data_queue} = Queue.start_link([])
 
-    {:ok, server} = Server2.start_link([bandwidth: 2_000_000])
+    {:ok, server} = Server2.start_link([bandwidth: bandwidth])
 
     %Components{voice_source: voice_source,
                 data_source: data_source,
                 voice_queue: voice_queue,
                 data_queue: data_queue,
-                server: server}
+                server: server,
+		preemptible: preemptible}
   end
 
   def maestro(opts) do
@@ -51,25 +60,29 @@ defmodule Maestro do
 
   # Esta função determina qual será a próxima ação tomada, de acordo com
   # os estados dos geradores, das filas e do servidor.
-  #def next_event(time, voice_arrival, data_arrival,
-  #voice_serve, data_serve, server_state)
+
+  # Assinatura legível da função:
+  # def next_event(time, voice_arrival, data_arrival,
+  # voice_serve, data_serve, server_state)
   # server_state = (:empty | {:serving, type, server_departure})
 
   # Servidor vazio, pacote de voz esperando
-  def next_event(t, _v_a, _d_a, voice_serve, _d_s, :empty)
+  def next_event(t, _v_a, _d_a, voice_serve, _d_s, :empty, _p)
   when voice_serve < t do
     :voice_serve
   end
 
   # Servidor vazio, pacote de dados esperando
-  def next_event(t, _v_a, _d_a, _v_s, data_serve, :empty)
+  def next_event(t, _v_a, _d_a, _v_s, data_serve, :empty, _p)
   when data_serve < t do
     :data_serve
   end
 
+  #def next_event(t, _v_a, _d_a, _v_s, _d_s, {:serving, s_d, :data}, true) when v_s < resto
+
   # Servidor vazio, nenhum pacote esperando: pulamos para o próximo
   # momento no qual acontecerá algo
-  def next_event(_t, v_a, d_a, v_s, d_s, :empty) do
+  def next_event(_t, v_a, d_a, v_s, d_s, :empty, _p) do
     next_time = min_v([v_a, d_a, v_s, d_s])
 
     cond do
@@ -81,7 +94,7 @@ defmodule Maestro do
   end
 
   # Servidor ocupado: não podemos começar a servir
-  def next_event(_t, v_a, d_a, _v_s, _d_s, {:serving, s_d, type}) do
+  def next_event(_t, v_a, d_a, _v_s, _d_s, {:serving, s_d, type}, _p) do
     next_time = min_v([v_a, d_a, s_d])
 
     cond do
@@ -93,7 +106,7 @@ defmodule Maestro do
   end
 
   def loop(time, components = %Components{}) do
-    IO.puts time
+    IO.puts to_string(time) <> " v_q:" <> to_string(Queue.len(components.voice_queue)) <> " d_q:" <> to_string(Queue.len(components.data_queue))
 
     voice_arrival = PacketGenerator.next_time(components.voice_source)
     data_arrival = PacketGenerator.next_time(components.data_source)
@@ -104,7 +117,7 @@ defmodule Maestro do
     server_state = Server2.status(components.server)
 
     next_event = next_event(time, voice_arrival, data_arrival,
-      voice_serve, data_serve, server_state)
+      voice_serve, data_serve, server_state, components.preemptible)
 
     case next_event do
       :voice_arrival ->
@@ -140,16 +153,17 @@ defmodule Maestro do
 
   def arrival(source, queue) do
     packet = PacketGenerator.get_packet(source)
+    packet = %{packet | last_queue_arrival: packet.time}
     Queue.put(queue, packet)
   end
 
   def voice_serve(time, queue, server) do
-    {:value, packet} = Queue.get(queue)
+    {:value, packet} = Queue.get(queue, time)
     Server2.begin_serve(server, time, :voice, packet)
   end
 
   def data_serve(time, queue, server) do
-    {:value, packet} = Queue.get(queue)
+    {:value, packet} = Queue.get(queue, time)
     Server2.begin_serve(server, time, :data, packet)
   end
 
