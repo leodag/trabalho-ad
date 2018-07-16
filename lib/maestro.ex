@@ -131,12 +131,12 @@ defmodule Maestro do
   end
 
   def loop(time, preemptible, departures) when is_number(time) and is_boolean(preemptible) do
-    IO.puts(
-      to_string(time)
-      <> " v_q:"
-      <> to_string(Queue.len(VoiceQueue))
-      <> " d_q:" <> to_string(Queue.len(DataQueue))
-    )
+    # IO.puts(
+    #   to_string(time)
+    #   <> " v_q:"
+    #   <> to_string(Queue.len(VoiceQueue))
+    #   <> " d_q:" <> to_string(Queue.len(DataQueue))
+    # )
 
     voice_arrival = PacketGenerator.next_time(VoiceSource)
     data_arrival = PacketGenerator.next_time(DataSource)
@@ -146,12 +146,20 @@ defmodule Maestro do
 
     server_state = Server2.status(Server)
 
-    IO.inspect(departures)
-    if rem(departures, 1000) == 0 do
+    # IO.inspect(departures)
+    if departures === 1000 do
       if EventStats.should_stop(EventStats) do
-	IO.inspect(EventStats.voice_confidence_intervals(EventStats))
-	exit(:normal)
+        GenServer.stop(EventStats)
+        {:ok, _} = EventStats.start_link([voice_generators: 30], name: EventStats)
       end
+    end
+
+    if departures === 2000 do
+      IO.inspect(EventStats.voice_stats(EventStats))
+      IO.inspect(EventStats.data_stats(EventStats))
+      IO.inspect(EventStats.voice_confidence_intervals(EventStats))
+      IO.inspect(EventStats.data_confidence_intervals(EventStats))
+      exit(:normal)
     end
 
     {next_time, next_event} =

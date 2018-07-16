@@ -44,6 +44,10 @@ defmodule EventStats do
     GenServer.call(server, :voice_confidence_intervals)
   end
 
+  def data_confidence_intervals(server) do
+    GenServer.call(server, :data_confidence_intervals)
+  end
+
   def data_stats(server) do
     GenServer.call(server, :data_stats)
   end
@@ -133,11 +137,26 @@ defmodule EventStats do
     mean_server = GenServer.call(struct.voice_stats.mean_server, :interval)
     mean_queue = GenServer.call(struct.voice_stats.mean_queue, :interval)
     mean_total = GenServer.call(struct.voice_stats.mean_total, :interval)
+    mean_interval_total = GenServer.call(struct.voice_stats.mean_interval_total, :interval)
 
     ret = %{ 
       mean_server_intervals: mean_server, 
       mean_queue_intervals: mean_queue, 
       mean_total_intervals: mean_total,
+      mean_interval_total: mean_interval_total
+    }
+    {:reply, ret, struct}
+  end
+
+  def handle_call(:data_confidence_intervals, _from, struct) do
+    mean_server = GenServer.call(struct.data_stats.mean_server, :interval)
+    mean_queue = GenServer.call(struct.data_stats.mean_queue, :interval)
+    mean_total = GenServer.call(struct.data_stats.mean_total, :interval)
+
+    ret = %{ 
+      mean_server_intervals: mean_server, 
+      mean_queue_intervals: mean_queue, 
+      mean_total_intervals: mean_total
     }
     {:reply, ret, struct}
   end
