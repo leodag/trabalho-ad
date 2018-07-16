@@ -14,26 +14,44 @@ defmodule AverageTimeCalc do
     GenServer.start_link(__MODULE__, opts, gs_opts)
   end
 
+  @doc """
+  Retorna no numero de entradas
+  """
   def get_count(server) do
     GenServer.call(server, :count)
   end
 
+  @doc """
+  retorna a soma parcial das entradas
+  """
   def get_partial_sum(server) do
     GenServer.call(server, :partial_sum)
   end
 
+  @doc """
+  retorna a media das entradas
+  """
   def get_mean(server) do
     GenServer.call(server, :mean)
   end
 
+  @doc """
+  retorna o desvio padrão
+  """
   def get_std_deviation(server) do
     GenServer.call(server, :std_deviation)
   end
 
+  @doc """
+  retorna o intervalo de confiança
+  """
   def get_interval(server) do
     GenServer.call(server, :interval)
   end
 
+  @doc """
+  serve para adicionar as entradas
+  """
   def put_value(server, value) do
     GenServer.cast(server, {:value, value})
   end
@@ -89,6 +107,7 @@ defmodule AverageTimeCalc do
     {:noreply, updated_struct}
   end
 
+  #função privada para o calculo dos intervalos de confiança
   defp interval(struct) do
     case struct.count < 30 do
       true -> {:infinity, :infinity}
@@ -100,6 +119,7 @@ defmodule AverageTimeCalc do
     end
   end
 
+  #função privada para o calculo da media
   defp mean(struct) do
     case struct.count do
       0 -> 0
@@ -107,10 +127,12 @@ defmodule AverageTimeCalc do
     end
   end
 
+  #função privada para o calculo do desvio padrão
   defp std_deviation(struct) do
     :math.sqrt(abs(variance(struct)))
   end
 
+  #função privada para o calculo da variança
   defp variance(struct) do
     case struct.count do
       0 -> 0

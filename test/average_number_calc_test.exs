@@ -6,8 +6,11 @@ defmodule AverageNumberCalcTest do
   end
 
   test "Initial values of time is correct different from zero" do
-    {:ok, pid} = GenServer.start_link(AverageNumberCalc, 120.129312)
-    assert GenServer.call(pid, :time) === 120.129312
+    {:ok, pid} = GenServer.start_link(AverageNumberCalc, 120)
+
+    GenServer.cast(pid, {:value, 1, 120.1})
+    GenServer.cast(pid, {:value, 2, 120.3})
+    assert GenServer.call(pid, :mean) === 1.6666666666666825
   end
 
   setup do
