@@ -90,10 +90,15 @@ defmodule AverageTimeCalc do
   end
 
   defp interval(struct) do
-    bound = @z_value * (std_deviation(struct) / :math.sqrt(struct.count))
-    upper_bound = mean(struct) + bound
-    lower_bound = mean(struct) - bound
-    {lower_bound, upper_bound}
+    case struct.count do
+      0 -> {:infinity, :infinity}
+      1 -> {:infinity, :infinity}
+      _ -> 
+        bound = @z_value * (std_deviation(struct) / :math.sqrt(struct.count))
+        upper_bound = mean(struct) + bound
+        lower_bound = mean(struct) - bound
+        {lower_bound, upper_bound}
+    end
   end
 
   defp mean(struct) do
@@ -104,13 +109,18 @@ defmodule AverageTimeCalc do
   end
 
   defp std_deviation(struct) do
-    :math.sqrt(variance(struct))
+    :math.sqrt(abs(variance(struct)))
   end
 
   defp variance(struct) do
-    partial_sum_squares = struct.partial_sum_squares / (struct.count - 1)
-    square_of_sum = :math.pow(struct.partial_sum, 2) / (struct.count * (struct.count - 1))
-    partial_sum_squares - square_of_sum
+    case struct.count do
+      0 -> 0
+      1 -> 0
+      _ -> 
+        partial_sum_squares = struct.partial_sum_squares / (struct.count - 1)
+        square_of_sum = :math.pow(struct.partial_sum, 2) / (struct.count * (struct.count - 1))
+        partial_sum_squares - square_of_sum
+    end
   end
 end
 

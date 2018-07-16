@@ -202,6 +202,7 @@ defmodule Maestro do
 
     IO.inspect(EventStats.voice_stats(EventStats))
     IO.inspect(EventStats.data_stats(EventStats))
+    IO.inspect(EventStats.voice_confidence_intervals(EventStats))
 
     loop(next_time, preemptible)
   end
