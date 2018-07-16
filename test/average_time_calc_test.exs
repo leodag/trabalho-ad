@@ -53,7 +53,7 @@ defmodule AverageTimeCalcTest do
     GenServer.cast(pid, {:value, 10.5})
     GenServer.cast(pid, {:value, 10})
 
-    assert GenServer.call(pid, :interval) === {8.148480161362258, 18.851519838637742}
+    assert GenServer.call(pid, :interval) === {:infinity, :infinity}
   end
 
 

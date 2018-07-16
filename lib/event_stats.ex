@@ -267,4 +267,5 @@ defmodule EventStats do
     GenServer.cast(voice_pid, {:value, voice_queue_size, time})
     GenServer.cast(data_pid, {:value, data_queue_size, time})
   end
+
 end

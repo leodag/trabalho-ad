@@ -90,9 +90,8 @@ defmodule AverageTimeCalc do
   end
 
   defp interval(struct) do
-    case struct.count do
-      0 -> {:infinity, :infinity}
-      1 -> {:infinity, :infinity}
+    case struct.count < 30 do
+      true -> {:infinity, :infinity}
       _ -> 
         bound = @z_value * (std_deviation(struct) / :math.sqrt(struct.count))
         upper_bound = mean(struct) + bound
