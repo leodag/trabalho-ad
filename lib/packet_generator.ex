@@ -27,9 +27,7 @@ defmodule PacketGenerator do
 
     # calculamos a chegada inicial
     reply = generate_packet(ppf_time, ppf_size, 0)
-    {:ok, %PacketGenerator{ppf_time: ppf_time,
-                           ppf_size: ppf_size,
-                           reply: reply}}
+    {:ok, %PacketGenerator{ppf_time: ppf_time, ppf_size: ppf_size, reply: reply}}
   end
 
   # gera um numero na distribuição especificada
@@ -39,9 +37,10 @@ defmodule PacketGenerator do
 
   # gera uma chegada
   defp generate_packet(ppf_time, ppf_size, prev_time) do
-    %Packet{time: prev_time + generate_number(ppf_time),
-            size: generate_number(ppf_size),
-            from: self()
+    %Packet{
+      time: prev_time + generate_number(ppf_time),
+      size: generate_number(ppf_size),
+      from: self()
     }
   end
 
@@ -79,22 +78,28 @@ defmodule VoiceGenerator do
   def init(opts) do
     generator_id = Keyword.get(opts, :generator_id, 0)
 
-    {:ok, packet_gen} = PacketGenerator.start_link([
-      ppf_time: Distributions.constant(0.016), # 16 ms
-      ppf_size: Distributions.constant(512),
-    ])
-    ppf_delay = Statistics.Distributions.Exponential.ppf(1/0.650) # media: 650 ms
+    {:ok, packet_gen} =
+      PacketGenerator.start_link(
+        # 16 ms
+        ppf_time: Distributions.constant(0.016),
+        ppf_size: Distributions.constant(512)
+      )
+
+    # media: 650 ms
+    ppf_delay = Statistics.Distributions.Exponential.ppf(1 / 0.650)
 
     # atraso inicial
     delay(packet_gen, ppf_delay)
 
     {
       :ok,
-      %VoiceGenerator{packet_gen: packet_gen,
-		      generator_id: generator_id,
-		      first_in_period: PacketGenerator.next_time(packet_gen),
-		      ppf_delay: ppf_delay,
-		      delay_chance: 1/22}
+      %VoiceGenerator{
+        packet_gen: packet_gen,
+        generator_id: generator_id,
+        first_in_period: PacketGenerator.next_time(packet_gen),
+        ppf_delay: ppf_delay,
+        delay_chance: 1 / 22
+      }
     }
   end
 
@@ -110,21 +115,20 @@ defmodule VoiceGenerator do
 
   def handle_call(:get_packet, _from, state = %VoiceGenerator{}) do
     # substitui o campo from para o pid deste processo e identifica o gerador
-    reply =
-      %{
-	PacketGenerator.get_packet(state.packet_gen) |
-	from: self(),
-	generator_id: state.generator_id,
-	first_in_period: state.first_in_period
-      }
+    reply = %{
+      PacketGenerator.get_packet(state.packet_gen)
+      | from: self(),
+        generator_id: state.generator_id,
+        first_in_period: state.first_in_period
+    }
 
     {reply, state} =
       if :rand.uniform() < state.delay_chance do
-	re = %{reply | last: true}
-	delay(state.packet_gen, state.ppf_delay)
-	{re, %{state | first_in_period: PacketGenerator.next_time(state.packet_gen)}}
+        re = %{reply | last: true}
+        delay(state.packet_gen, state.ppf_delay)
+        {re, %{state | first_in_period: PacketGenerator.next_time(state.packet_gen)}}
       else
-	{reply, state}
+        {reply, state}
       end
 
     {:reply, reply, state}
@@ -136,13 +140,16 @@ defmodule VoiceGenerator do
 end
 
 defmodule DataGenerator do
-  def start_link(opts) do
+  def start_link(opts, gs_opts \\ []) do
     # default: rho = 10% de 2Mbps
     lambda = Keyword.get(opts, :lambda, 264.9)
 
-    PacketGenerator.start_link([
-      ppf_time: Statistics.Distributions.Exponential.ppf(lambda),
-      ppf_size: &Distributions.data_size_ppf/1,
-    ])
+    PacketGenerator.start_link(
+      [
+        ppf_time: Statistics.Distributions.Exponential.ppf(lambda),
+        ppf_size: &Distributions.data_size_ppf/1
+      ],
+      gs_opts
+    )
   end
 end
