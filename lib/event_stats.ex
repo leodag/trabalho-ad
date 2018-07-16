@@ -184,7 +184,7 @@ defmodule EventStats do
       case {is_first, is_last} do
         {true, _} -> 
           #cria uma nova calculadora de media
-          {:ok, new_pid} = GenServer.start_link(AverageTimeCalc, packet.time)
+          {:ok, new_pid} = GenServer.start_link(AverageTimeCalc, time)
           new_interval_stats = put_elem(struct.interval_stats, id, new_pid)
 
           #atualizar a struct
@@ -192,7 +192,7 @@ defmodule EventStats do
         #ultimo pacote do periodo ocupado
         {false, true} -> 
           last_entry = GenServer.call(interval_pid, :last_entry)
-          GenServer.cast(interval_pid, {:value, packet.time - last_entry})
+          GenServer.cast(interval_pid, {:value, time - last_entry})
 
           partial_mean = GenServer.call(interval_pid, :mean)
           GenServer.cast(struct.voice_stats.mean_interval_total, {:value, partial_mean})
@@ -200,7 +200,7 @@ defmodule EventStats do
           struct
         _ ->
           last_entry = GenServer.call(interval_pid, :last_entry)
-          GenServer.cast(interval_pid, {:value, packet.time - last_entry})
+          GenServer.cast(interval_pid, {:value, time - last_entry})
 
           struct
       end

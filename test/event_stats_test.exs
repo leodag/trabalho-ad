@@ -84,10 +84,10 @@ defmodule EventStatsTest do
     GenServer.cast(pid, {
       :voice_serve, #tipo de evento
       %Packet{
-        first_in_period: 1,
+        first_in_period: 5,
         size: 512,
         from: 123,
-        generator_id: 1,
+        generator_id: 2,
         last: false,
         time: 5,
         time_on_queue: 2,
@@ -105,18 +105,53 @@ defmodule EventStatsTest do
         size: 512,
         from: 123,
         generator_id: 1,
-        last: true,
+        last: false,
         time: 7,
         time_on_queue: 2,
         time_on_server: 0
       },    #pacote
       1,            #numero de pacotes na fila de voz
       2,            #numero de pacotes na fila de dados
-      5             #tempo do sistema
+      7             #tempo do sistema
     })
 
+    GenServer.cast(pid, {
+      :voice_serve, #tipo de evento
+      %Packet{
+        first_in_period: 1,
+        size: 512,
+        from: 123,
+        generator_id: 1,
+        last: true,
+        time: 9,
+        time_on_queue: 2,
+        time_on_server: 0
+      },    #pacote
+      1,            #numero de pacotes na fila de voz
+      2,            #numero de pacotes na fila de dados
+      9             #tempo do sistema
+    })
+
+    GenServer.cast(pid, {
+      :voice_serve, #tipo de evento
+      %Packet{
+        first_in_period: 5,
+        size: 512,
+        from: 123,
+        generator_id: 2,
+        last: true,
+        time: 9.5,
+        time_on_queue: 2,
+        time_on_server: 0
+      },    #pacote
+      1,            #numero de pacotes na fila de voz
+      2,            #numero de pacotes na fila de dados
+      10             #tempo do sistema
+    })
+
+
     ret = GenServer.call(pid, :voice_stats)
-    assert ret.mean_interval_total === 2.5
+    assert ret.mean_interval_total === 4.5
   end
 
   test "media tempo no servidor, fila e total voz", %{pid: pid} do
