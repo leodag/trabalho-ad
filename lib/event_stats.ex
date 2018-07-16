@@ -176,25 +176,36 @@ defmodule EventStats do
 
     id = packet.generator_id - 1
     interval_pid = elem(struct.interval_stats, id)
-    GenServer.cast(interval_pid, {:value, packet.time_on_queue})
 
-    case packet.last do
-      #ultimo pacote do periodo ocupado
-      true -> 
-        partial_mean = GenServer.call(interval_pid, :mean)
-        GenServer.cast(struct.voice_stats.mean_interval_total, {:value, partial_mean})
+    is_first = packet.first_in_period === packet.time
+    is_last = packet.last
 
-        #cria uma nova calculadora de media
-        {:ok, new_pid} = GenServer.start_link(AverageTimeCalc, [])
-        new_interval_stats = put_elem(struct.interval_stats, id, new_pid)
+    struct = 
+      case {is_first, is_last} do
+        {true, _} -> 
+          #cria uma nova calculadora de media
+          {:ok, new_pid} = GenServer.start_link(AverageTimeCalc, packet.time)
+          new_interval_stats = put_elem(struct.interval_stats, id, new_pid)
 
-        #atualizar a struct
-        new_struct = put_in(struct.interval_stats, new_interval_stats)
+          #atualizar a struct
+          put_in(struct.interval_stats, new_interval_stats)
+        #ultimo pacote do periodo ocupado
+        {false, true} -> 
+          last_entry = GenServer.call(interval_pid, :last_entry)
+          GenServer.cast(interval_pid, {:value, packet.time - last_entry})
 
-        {:noreply, new_struct}
-      _ ->
-        {:noreply, struct}
-    end
+          partial_mean = GenServer.call(interval_pid, :mean)
+          GenServer.cast(struct.voice_stats.mean_interval_total, {:value, partial_mean})
+
+          struct
+        _ ->
+          last_entry = GenServer.call(interval_pid, :last_entry)
+          GenServer.cast(interval_pid, {:value, packet.time - last_entry})
+
+          struct
+      end
+
+    {:noreply, struct}
   end
 
   #lida com os dados de uma partida de dados

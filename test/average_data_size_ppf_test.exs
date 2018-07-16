@@ -16,7 +16,7 @@ defmodule AverageDataSizePpf do
   end
 
   test "find average of 5000 values in the distribution" do
-    expected_average = 750
+    expected_average = 755
     values = for _ <- 1..5000 do
       Distributions.data_size_ppf(:rand.uniform())
     end

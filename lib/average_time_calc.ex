@@ -6,7 +6,8 @@ defmodule AverageTimeCalc do
   defstruct(
     partial_sum: 0,
     partial_sum_squares: 0,
-    count: 0
+    count: 0,
+    last_entry: 0
   )
 
   def start_link(opts, gs_opts \\ []) do
@@ -38,13 +39,23 @@ defmodule AverageTimeCalc do
   end
 
   @impl true
-  def init(_) do
-    {:ok, %AverageTimeCalc{}}
+  def init(first) do
+    case is_number(first) do
+      true ->
+        {:ok, %AverageTimeCalc{last_entry: first}}
+      _ -> 
+        {:ok, %AverageTimeCalc{last_entry: 0}}
+    end
   end
 
   @impl true
   def handle_call(:count, _from, struct) do
     {:reply, struct.count, struct}
+  end
+
+  @impl true
+  def handle_call(:last_entry , _from, struct) do
+    {:reply, struct.last_entry, struct}
   end
 
   @impl true
@@ -71,7 +82,8 @@ defmodule AverageTimeCalc do
     updated_struct = %AverageTimeCalc{
       partial_sum: struct.partial_sum + time,
       partial_sum_squares: struct.partial_sum_squares + :math.pow(time, 2),
-      count: struct.count + 1
+      count: struct.count + 1,
+      last_entry: struct.last_entry + time
     }
 
     {:noreply, updated_struct}

@@ -15,11 +15,11 @@ defmodule EventStatsTest do
 
   @voice_producers 30
   test "criar o maestro de dados" do
-    {:ok, _} = GenServer.start_link(EventStats, 0)
+    {:ok, _} = GenServer.start_link(EventStats, [starting_time: 0])
   end
 
   setup do
-    {:ok, pid} = GenServer.start_link(EventStats, 0)
+    {:ok, pid} = GenServer.start_link(EventStats, [starting_time: 0])
 
     {:ok, pid: pid}
   end
@@ -67,7 +67,7 @@ defmodule EventStatsTest do
     GenServer.cast(pid, {
       :voice_serve, #tipo de evento
       %Packet{
-        first_in_period: true,
+        first_in_period: 1,
         size: 512,
         from: 123,
         generator_id: 1,
@@ -84,12 +84,29 @@ defmodule EventStatsTest do
     GenServer.cast(pid, {
       :voice_serve, #tipo de evento
       %Packet{
-        first_in_period: false,
+        first_in_period: 1,
+        size: 512,
+        from: 123,
+        generator_id: 1,
+        last: false,
+        time: 5,
+        time_on_queue: 2,
+        time_on_server: 0
+      },    #pacote
+      1,            #numero de pacotes na fila de voz
+      2,            #numero de pacotes na fila de dados
+      5             #tempo do sistema
+    })
+
+    GenServer.cast(pid, {
+      :voice_serve, #tipo de evento
+      %Packet{
+        first_in_period: 1,
         size: 512,
         from: 123,
         generator_id: 1,
         last: true,
-        time: 5,
+        time: 7,
         time_on_queue: 2,
         time_on_server: 0
       },    #pacote
