@@ -7,7 +7,8 @@ defmodule SimuladorAd.MixProject do
       version: "0.1.0",
       elixir: "~> 1.6",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      escript: escript_config()
     ]
   end
 
@@ -24,5 +25,9 @@ defmodule SimuladorAd.MixProject do
       {:statistics, "~> 0.5.0"},
       {:heap, "~> 2.0.0"},
     ]
+  end
+
+  defp escript_config do
+    [main_module: CLI]
   end
 end
