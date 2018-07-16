@@ -9,6 +9,34 @@ defmodule AverageTimeCalc do
     count: 0
   )
 
+  def start_link(opts, gs_opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, gs_opts)
+  end
+
+  def get_count(server) do
+    GenServer.call(server, :count)
+  end
+
+  def get_partial_sum(server) do
+    GenServer.call(server, :partial_sum)
+  end
+
+  def get_mean(server) do
+    GenServer.call(server, :mean)
+  end
+
+  def get_std_deviation(server) do
+    GenServer.call(server, :std_deviation)
+  end
+
+  def get_interval(server) do
+    GenServer.call(server, :interval)
+  end
+
+  def put_value(server, value) do
+    GenServer.cast(server, {:value, value})
+  end
+
   @impl true
   def init(_) do
     {:ok, %AverageTimeCalc{}}
@@ -45,6 +73,7 @@ defmodule AverageTimeCalc do
       partial_sum_squares: struct.partial_sum_squares + :math.pow(time, 2),
       count: struct.count + 1
     }
+
     {:noreply, updated_struct}
   end
 

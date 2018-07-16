@@ -11,6 +11,30 @@ defmodule AverageNumberCalc do
     last_entry: 0
   )
 
+  def start_link(opts, gs_opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, gs_opts)
+  end
+
+  def get_time(server) do
+    GenServer.call(server, :time)
+  end
+
+  def get_partial_sum(server) do
+    GenServer.call(server, :partial_sum)
+  end
+
+  def get_mean(server) do
+    GenServer.call(server, :mean)
+  end
+
+  def get_std_deviation(server) do
+    GenServer.call(server, :std_deviation)
+  end
+
+  def put_value(server, number, time) do
+    GenServer.cast(server, {:value, number, time})
+  end
+
   @impl true
   def init(time) do
     {:ok, %AverageNumberCalc{time: time}}

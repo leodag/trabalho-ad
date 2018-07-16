@@ -41,6 +41,8 @@ defmodule Maestro do
 
     {:ok, _} = Server2.start_link([bandwidth: bandwidth], name: Server)
 
+    {:ok, _} = EventStats.start_link([voice_generators: voice_generator_count], name: EventStats)
+
     preemptible
   end
 
@@ -55,51 +57,55 @@ defmodule Maestro do
     Enum.reduce(xs, x, &min(&1, &2))
   end
 
-  # Esta função determina qual será a próxima ação tomada, de acordo com
-  # os estados dos geradores, das filas e do servidor.
+  # Esta função determina qual será a próxima ação tomada e o momento no qual ela
+  # ocorrerá, de acordo com os estados dos geradores, das filas e do servidor.
 
   # Assinatura legível da função:
   # def next_event(time, voice_arrival, data_arrival,
-  # voice_serve, data_serve, server_state)
+  # voice_serve, data_serve, server_state, preemptible)
   # server_state = (:empty | {:serving, type, server_departure})
 
   # Servidor vazio, pacote de voz esperando
   def next_event(t, _v_a, _d_a, voice_serve, _d_s, :empty, _p)
       when voice_serve <= t do
-    :voice_serve
+    {t, :voice_serve}
   end
 
   # Servidor vazio, pacote de dados esperando
   def next_event(t, _v_a, _d_a, _v_s, data_serve, :empty, _p)
       when data_serve <= t do
-    :data_serve
+    {t, :data_serve}
   end
-
-  # def next_event(t, _v_a, _d_a, _v_s, _d_s, {:serving, s_d, :data}, true) when v_s < resto
 
   # Servidor vazio, nenhum pacote esperando: pulamos para o próximo
   # momento no qual acontecerá algo
   def next_event(_t, v_a, d_a, v_s, d_s, :empty, _p) do
     next_time = min_v([v_a, d_a, v_s, d_s])
 
-    cond do
-      next_time == v_a -> :voice_arrival
-      next_time == d_a -> :data_arrival
-      next_time == v_s -> :voice_serve
-      next_time == d_s -> :data_serve
-    end
+    next_event =
+      cond do
+        next_time == v_a -> :voice_arrival
+        next_time == d_a -> :data_arrival
+        next_time == v_s -> :voice_serve
+        next_time == d_s -> :data_serve
+      end
+
+    {next_time, next_event}
   end
 
   # Servidor ocupado e não preemptível: não podemos começar a servir
   def next_event(_t, v_a, d_a, _v_s, _d_s, {:serving, s_d, type}, false) do
     next_time = min_v([v_a, d_a, s_d])
 
-    cond do
-      next_time == v_a -> :voice_arrival
-      next_time == d_a -> :data_arrival
-      next_time == s_d and type == :voice -> :voice_departure
-      next_time == s_d and type == :data -> :data_departure
-    end
+    next_event =
+      cond do
+        next_time == v_a -> :voice_arrival
+        next_time == d_a -> :data_arrival
+        next_time == s_d and type == :voice -> :voice_departure
+        next_time == s_d and type == :data -> :data_departure
+      end
+
+    {next_time, next_event}
   end
 
   # Servidor ocupado e preemptível: não podemos começar a servir dados,
@@ -112,19 +118,24 @@ defmodule Maestro do
         min_v([v_a, d_a, v_s, s_d])
       end
 
-    cond do
-      next_time == v_a -> :voice_arrival
-      next_time == d_a -> :data_arrival
-      next_time == s_d and type == :voice -> :voice_departure
-      next_time == s_d and type == :data -> :data_departure
-      next_time == v_s -> :interrupt_data
-    end
+    next_event =
+      cond do
+        next_time == v_a -> :voice_arrival
+        next_time == d_a -> :data_arrival
+        next_time == s_d and type == :voice -> :voice_departure
+        next_time == s_d and type == :data -> :data_departure
+        next_time == v_s -> :interrupt_data
+      end
+
+    {next_time, next_event}
   end
 
   def loop(time, preemptible) when is_number(time) and is_boolean(preemptible) do
     IO.puts(
-      to_string(time) <>
-        " v_q:" <> to_string(Queue.len(VoiceQueue)) <> " d_q:" <> to_string(Queue.len(DataQueue))
+      to_string(time)
+      <> " v_q:"
+      <> to_string(Queue.len(VoiceQueue))
+      <> " d_q:" <> to_string(Queue.len(DataQueue))
     )
 
     voice_arrival = PacketGenerator.next_time(VoiceSource)
@@ -135,7 +146,7 @@ defmodule Maestro do
 
     server_state = Server2.status(Server)
 
-    next_event =
+    {next_time, next_event} =
       next_event(
         time,
         voice_arrival,
@@ -146,80 +157,102 @@ defmodule Maestro do
         preemptible
       )
 
-    case next_event do
-      :voice_arrival ->
-        IO.puts("v_a")
-        arrival(VoiceSource, VoiceQueue)
-        voice_arrival
+    packet =
+      case next_event do
+	:voice_arrival ->
+          #IO.puts("v_a")
+          voice_arrival()
 
-      :data_arrival ->
-        IO.puts("d_a")
-        arrival(DataSource, DataQueue)
-        data_arrival
+	:data_arrival ->
+          #IO.puts("d_a")
+          data_arrival()
 
-      :voice_serve ->
-        IO.puts("v_s")
-        serve_start = max(voice_serve, time)
-        voice_serve(serve_start, VoiceQueue, Server)
-        serve_start
+	:voice_serve ->
+          #IO.puts("v_s")
+          voice_serve(next_time)
 
-      :data_serve ->
-        IO.puts("d_s")
-        serve_start = max(data_serve, time)
-        data_serve(serve_start, DataQueue, Server)
-        serve_start
+	:data_serve ->
+          #IO.puts("d_s")
+          data_serve(next_time)
 
-      :voice_departure ->
-        IO.puts("v_d")
-        {:serving, serve_end, :voice} = server_state
-        voice_departure(Server)
-        serve_end
+	:voice_departure ->
+          #IO.puts("v_d" <> to_string(time))
+          voice_departure()
 
-      :data_departure ->
-        IO.puts("d_d")
-        {:serving, serve_end, :data} = server_state
-        data_departure(Server)
-        serve_end
+	:data_departure ->
+          #IO.puts("d_d")
+          data_departure()
 
-      :interrupt_data ->
-        IO.puts("i_d")
-        interrupt_data(voice_serve)
-        voice_serve
-    end
-    |> loop(preemptible)
+	:interrupt_data ->
+          #IO.puts("i_d")
+          interrupt_data(next_time)
+      end
+
+    voice_q_size = Queue.len(VoiceQueue)
+    data_q_size = Queue.len(DataQueue)
+
+    EventStats.event(
+      EventStats,
+      next_event,
+      packet,
+      voice_q_size,
+      data_q_size,
+      next_time
+    )
+
+    IO.inspect(EventStats.voice_stats(EventStats))
+    IO.inspect(EventStats.data_stats(EventStats))
+
+    loop(next_time, preemptible)
   end
 
-  def arrival(source, queue) do
-    packet = PacketGenerator.get_packet(source)
+  # chegada: obtém o pacote do gerador, e insere no final da fila
+  def voice_arrival() do
+    packet = PacketGenerator.get_packet(VoiceSource)
     packet = %{packet | last_queue_arrival: packet.time}
-    Queue.put(queue, packet)
+    Queue.put(VoiceQueue, packet)
+
+    packet
   end
 
-  def voice_serve(time, queue, server) do
-    {:value, packet} = Queue.get(queue, time)
-    Server2.begin_serve(server, time, :voice, packet)
+  def data_arrival() do
+    packet = PacketGenerator.get_packet(DataSource)
+    packet = %{packet | last_queue_arrival: packet.time}
+    Queue.put(DataQueue, packet)
+
+    packet
   end
 
-  def data_serve(time, queue, server) do
-    {:value, packet} = Queue.get(queue, time)
-    Server2.begin_serve(server, time, :data, packet)
+  # início do serviço: retira da fila e coloca no servidor
+  def voice_serve(time) do
+    {:value, packet} = Queue.get(VoiceQueue, time)
+    Server2.begin_serve(Server, time, :voice, packet)
+
+    packet
   end
 
-  def voice_departure(server) do
-    packet = Server2.end_serve(server)
+  def data_serve(time) do
+    {:value, packet} = Queue.get(DataQueue, time)
+    Server2.begin_serve(Server, time, :data, packet)
 
-    IO.inspect(packet)
+    packet
   end
 
-  def data_departure(server) do
-    packet = Server2.end_serve(server)
-
-    IO.inspect(packet)
+  # saída: retira o pacote do servidor
+  def voice_departure() do
+    _packet = Server2.end_serve(Server)
   end
 
+  def data_departure() do
+    _packet = Server2.end_serve(Server)
+  end
+
+  # interrompe um pacote de dados: retira do servidor e retorna
+  # ao começo da fila
   def interrupt_data(time) do
     packet = Server2.interrupt_serve(Server, time)
-
     Queue.put_r(DataQueue, packet, time)
+
+    packet
   end
 end

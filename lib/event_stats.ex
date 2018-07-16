@@ -28,8 +28,31 @@ defmodule EventStats do
 
   defstruct [:data_stats, :voice_stats, :interval_stats]
 
+  def start_link(opts, gs_opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, gs_opts)
+  end
+
+  def event(server, event_type, packet, voice_q_size, data_q_size, time) do
+    GenServer.cast(server, {event_type, packet, voice_q_size, data_q_size, time})
+  end
+
+  def voice_stats(server) do
+    GenServer.call(server, :voice_stats)
+  end
+
+  def data_stats(server) do
+    GenServer.call(server, :data_stats)
+  end
+
+  def size(server) do
+    GenServer.call(server, :size)
+  end
+
   @impl true
-  def init(starting_time) do
+  def init(opts) do
+    starting_time = Keyword.get(opts, :starting_time, 0)
+    voice_generator_count = Keyword.get(opts, :voice_generators, 30)
+
     {:ok, mean_server} = GenServer.start_link(AverageTimeCalc, [])
     {:ok, mean_queue} = GenServer.start_link(AverageTimeCalc, [])
     {:ok, mean_total} = GenServer.start_link(AverageTimeCalc, [])
@@ -60,7 +83,7 @@ defmodule EventStats do
 
     interval_stats = 
       List.to_tuple(
-        for _ <- 1..30 do
+        for _ <- 1..voice_generator_count do
           {:ok, pid} = GenServer.start_link(AverageTimeCalc, [])
           pid
         end
@@ -87,6 +110,7 @@ defmodule EventStats do
     mean_total = GenServer.call(struct.voice_stats.mean_total, :mean)
     mean_interval_total = GenServer.call(struct.voice_stats.mean_interval_total, :mean)
     mean_number = GenServer.call(struct.voice_stats.mean_number, :mean)
+
     ret = %{ 
       mean_server: mean_server, 
       mean_queue: mean_queue, 
@@ -104,13 +128,13 @@ defmodule EventStats do
     mean_queue = GenServer.call(struct.data_stats.mean_queue, :mean)
     mean_total = GenServer.call(struct.data_stats.mean_total, :mean)
     mean_number = GenServer.call(struct.data_stats.mean_number, :mean)
+
     ret = %{ 
       mean_server: mean_server, 
       mean_queue: mean_queue, 
       mean_total: mean_total,
       mean_number: mean_number 
     }
-
     {:reply, ret, struct}
   end
 
