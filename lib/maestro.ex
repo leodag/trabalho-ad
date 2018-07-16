@@ -13,7 +13,7 @@ defmodule Maestro do
     # 755 é o tamanho médio de um pacote calculado utilizando
     # 0.3 * 64 + (Distributions.data_size_cdf(512) - 0.1 - 0.3) * 288 + 0.1 * 512
     # + (0.7 - Distributions.data_size_cdf(512)) * 1006 + 0.3 * 1500
-    lambda_data = bandwidth * rho / 100 / 755
+    lambda_data = bandwidth * rho / 100 / (755 * 8)
 
     # Array de pids dos nossos geradores de voz
     voice_generators =
@@ -49,7 +49,7 @@ defmodule Maestro do
   def maestro(opts) do
     components = init(opts)
 
-    loop(0, components)
+    loop(0, components, 0)
   end
 
   # Retorna o menor valor de um vetor
@@ -130,7 +130,7 @@ defmodule Maestro do
     {next_time, next_event}
   end
 
-  def loop(time, preemptible) when is_number(time) and is_boolean(preemptible) do
+  def loop(time, preemptible, departures) when is_number(time) and is_boolean(preemptible) do
     IO.puts(
       to_string(time)
       <> " v_q:"
@@ -145,6 +145,14 @@ defmodule Maestro do
     data_serve = Queue.next_time(DataQueue)
 
     server_state = Server2.status(Server)
+
+    IO.inspect(departures)
+    if rem(departures, 1000) == 0 do
+      if EventStats.should_stop(EventStats) do
+	IO.inspect(EventStats.voice_confidence_intervals(EventStats))
+	exit(:normal)
+      end
+    end
 
     {next_time, next_event} =
       next_event(
@@ -181,10 +189,12 @@ defmodule Maestro do
 
 	:data_departure ->
           #IO.puts("d_d")
+	  departures = departures + 1
           data_departure()
 
 	:interrupt_data ->
           #IO.puts("i_d")
+	  departures = departures + 1
           interrupt_data(next_time)
       end
 
@@ -200,11 +210,11 @@ defmodule Maestro do
       next_time
     )
 
-    IO.inspect(EventStats.voice_stats(EventStats))
-    IO.inspect(EventStats.data_stats(EventStats))
-    IO.inspect(EventStats.voice_confidence_intervals(EventStats))
+    #IO.inspect(EventStats.voice_stats(EventStats))
+    #IO.inspect(EventStats.data_stats(EventStats))
+    #IO.inspect(EventStats.voice_confidence_intervals(EventStats))
 
-    loop(next_time, preemptible)
+    loop(next_time, preemptible, departures)
   end
 
   # chegada: obtém o pacote do gerador, e insere no final da fila
