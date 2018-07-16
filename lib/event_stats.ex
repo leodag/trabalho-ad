@@ -48,6 +48,10 @@ defmodule EventStats do
     GenServer.call(server, :data_stats)
   end
 
+  def should_stop(server) do
+    GenServer.call(server, :should_stop)
+  end
+
   def size(server) do
     GenServer.call(server, :size)
   end
@@ -154,6 +158,20 @@ defmodule EventStats do
     }
     {:reply, ret, struct}
   end
+
+  #retorna trrue se os valores da IC forem menores que 10% da media nas 
+  #estatisticas de voz
+  @impl true
+  def handle_call(:should_stop, _from, struct) do
+    mean_total = GenServer.call(struct.voice_stats.mean_total, :mean)
+
+    {lower_total, higher_total} = GenServer.call(struct.voice_stats.mean_total, :interval)
+
+    return_value = mean_total * 1.1 > higher_total and
+                    mean_total * 0.9 < lower_total
+    {:reply, return_value, struct}
+  end
+
 
   #pega os dados de uma interrupcao de servico de dado
   @impl true
