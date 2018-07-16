@@ -29,13 +29,17 @@ defmodule Queue do
     head = :queue.peek(queue)
 
     case head do
-      {:value, %Packet{time: time}} -> time
-      _ -> head # :empty
+      {:value, %Packet{time: time}} ->
+        time
+
+      # :empty
+      _ ->
+        head
     end
   end
 
   defp put_and_set_arrival(queue, item) do
-    item  = %{item | last_queue_arrival: item.time}
+    item = %{item | last_queue_arrival: item.time}
     :queue.in(item, queue)
   end
 
@@ -47,9 +51,12 @@ defmodule Queue do
   defp get_and_update_time(queue, time) do
     case :queue.out(queue) do
       {{:value, packet}, new_queue} ->
-	{{:value, %{packet |
-		    time_on_queue: packet.time_on_queue + time - packet.last_queue_arrival}}, new_queue}
-      other -> other
+        {{:value,
+          %{packet | time_on_queue: packet.time_on_queue + time - packet.last_queue_arrival}},
+         new_queue}
+
+      other ->
+        other
     end
   end
 end

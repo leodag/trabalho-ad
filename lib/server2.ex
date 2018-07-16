@@ -6,7 +6,8 @@ defmodule Server2 do
   end
 
   def init(opts) do
-    bandwidth = Keyword.get(opts, :bandwidth, 2_000_000) # 2 Mbps
+    # 2 Mbps
+    bandwidth = Keyword.get(opts, :bandwidth, 2_000_000)
     {:ok, {bandwidth, :empty}}
   end
 
@@ -36,7 +37,11 @@ defmodule Server2 do
     }
   end
 
-  def handle_call({:interrupt_serve, time}, _from, {bandwidth, {:serving, serve_start, _serve_end, _type, packet}}) do
+  def handle_call(
+        {:interrupt_serve, time},
+        _from,
+        {bandwidth, {:serving, serve_start, _serve_end, _type, packet}}
+      ) do
     {
       :reply,
       add_serve_time(packet, serve_start, time),
@@ -44,7 +49,11 @@ defmodule Server2 do
     }
   end
 
-  def handle_call(:end_serve, _from, {bandwidth, {:serving, serve_start, serve_end, _type, packet}}) do
+  def handle_call(
+        :end_serve,
+        _from,
+        {bandwidth, {:serving, serve_start, serve_end, _type, packet}}
+      ) do
     {
       :reply,
       add_serve_time(packet, serve_start, serve_end),
@@ -56,7 +65,11 @@ defmodule Server2 do
     {:reply, :empty, state}
   end
 
-  def handle_call(:status, _from, state = {_bandwidth, {:serving, _serve_start, serve_end, type, _packet}}) do
+  def handle_call(
+        :status,
+        _from,
+        state = {_bandwidth, {:serving, _serve_start, serve_end, type, _packet}}
+      ) do
     {:reply, {:serving, serve_end, type}, state}
   end
 

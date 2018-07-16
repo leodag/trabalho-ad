@@ -10,9 +10,10 @@ defmodule HeapPacketQueue do
 
     queue = Heap.new(&(&1.time < &2.time))
 
-    packets = for generator <- packet_generators do
-      PacketGenerator.get_packet(generator)
-    end
+    packets =
+      for generator <- packet_generators do
+        PacketGenerator.get_packet(generator)
+      end
 
     {:ok, Enum.into(packets, queue)}
   end

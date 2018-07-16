@@ -8,17 +8,16 @@ defmodule Distributions do
   end
 
   def data_size_cdf(s) when s >= 0 and s < 512 do
-    0.3 + 0.3/1436 * (s - 64)
+    0.3 + 0.3 / 1436 * (s - 64)
   end
 
   def data_size_cdf(s) when s >= 0 and s < 1500 do
-    0.4 + 0.3/1436 * (s - 64)
+    0.4 + 0.3 / 1436 * (s - 64)
   end
 
   def data_size_cdf(s) when s == 1500 do
     1
   end
-
 
   def data_size_ppf(s) when s >= 0 and s < 0.3 do
     64
@@ -26,7 +25,7 @@ defmodule Distributions do
 
   # valor de s calculado utilizando data_size_cdf(512) - 0.1
   def data_size_ppf(s) when s >= 0 and s < 0.39359331476323123 do
-    64 + round(1436/0.3 * (s - 0.3))
+    64 + round(1436 / 0.3 * (s - 0.3))
   end
 
   # valor de s calculado utilizando data_size_cdf(512)
@@ -36,7 +35,7 @@ defmodule Distributions do
 
   def data_size_ppf(s) when s >= 0 and s < 0.7 do
     # valor de s calculado utilizando data_size_cdf(512)
-    512 + round(1436/0.3 * (s - 0.4935933147632312))
+    512 + round(1436 / 0.3 * (s - 0.4935933147632312))
   end
 
   def data_size_ppf(s) when s >= 0 and s <= 1 do

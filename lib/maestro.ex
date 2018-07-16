@@ -1,6 +1,6 @@
 defmodule Maestro do
   def start_link(opts) do
-    spawn_link fn -> maestro(opts) end
+    spawn_link(fn -> maestro(opts) end)
   end
 
   def init(opts) do
@@ -13,12 +13,12 @@ defmodule Maestro do
     # 755 é o tamanho médio de um pacote calculado utilizando
     # 0.3 * 64 + (Distributions.data_size_cdf(512) - 0.1 - 0.3) * 288 + 0.1 * 512
     # + (0.7 - Distributions.data_size_cdf(512)) * 1006 + 0.3 * 1500
-    lambda_data = (bandwidth * rho / 100) / 755
+    lambda_data = bandwidth * rho / 100 / 755
 
     # Array de pids dos nossos geradores de voz
     voice_generators =
       for n <- 1..voice_generator_count do
-        {:ok, pid} = VoiceGenerator.start_link([generator_id: n])
+        {:ok, pid} = VoiceGenerator.start_link(generator_id: n)
         pid
       end
 
@@ -30,8 +30,8 @@ defmodule Maestro do
     # Realizamos o mesmo processo para os geradores de dados
     data_generators =
       for _ <- 1..data_generator_count do
-	{:ok, pid} = DataGenerator.start_link([lambda: lambda_data])
-	pid
+        {:ok, pid} = DataGenerator.start_link(lambda: lambda_data)
+        pid
       end
 
     {:ok, _} = HeapPacketQueue.start_link([generators: data_generators], name: DataSource)
@@ -65,17 +65,17 @@ defmodule Maestro do
 
   # Servidor vazio, pacote de voz esperando
   def next_event(t, _v_a, _d_a, voice_serve, _d_s, :empty, _p)
-  when voice_serve <= t do
+      when voice_serve <= t do
     :voice_serve
   end
 
   # Servidor vazio, pacote de dados esperando
   def next_event(t, _v_a, _d_a, _v_s, data_serve, :empty, _p)
-  when data_serve <= t do
+      when data_serve <= t do
     :data_serve
   end
 
-  #def next_event(t, _v_a, _d_a, _v_s, _d_s, {:serving, s_d, :data}, true) when v_s < resto
+  # def next_event(t, _v_a, _d_a, _v_s, _d_s, {:serving, s_d, :data}, true) when v_s < resto
 
   # Servidor vazio, nenhum pacote esperando: pulamos para o próximo
   # momento no qual acontecerá algo
@@ -107,9 +107,9 @@ defmodule Maestro do
   def next_event(_t, v_a, d_a, v_s, _d_s, {:serving, s_d, type}, true) do
     next_time =
       if type == :voice do
-	min_v([v_a, d_a, s_d])
+        min_v([v_a, d_a, s_d])
       else
-	min_v([v_a, d_a, v_s, s_d])
+        min_v([v_a, d_a, v_s, s_d])
       end
 
     cond do
@@ -122,7 +122,10 @@ defmodule Maestro do
   end
 
   def loop(time, preemptible) when is_number(time) and is_boolean(preemptible) do
-    IO.puts to_string(time) <> " v_q:" <> to_string(Queue.len(VoiceQueue)) <> " d_q:" <> to_string(Queue.len(DataQueue))
+    IO.puts(
+      to_string(time) <>
+        " v_q:" <> to_string(Queue.len(VoiceQueue)) <> " d_q:" <> to_string(Queue.len(DataQueue))
+    )
 
     voice_arrival = PacketGenerator.next_time(VoiceSource)
     data_arrival = PacketGenerator.next_time(DataSource)
@@ -132,42 +135,56 @@ defmodule Maestro do
 
     server_state = Server2.status(Server)
 
-    next_event = next_event(time, voice_arrival, data_arrival,
-      voice_serve, data_serve, server_state, preemptible)
+    next_event =
+      next_event(
+        time,
+        voice_arrival,
+        data_arrival,
+        voice_serve,
+        data_serve,
+        server_state,
+        preemptible
+      )
 
     case next_event do
       :voice_arrival ->
-	IO.puts "v_a"
-	arrival(VoiceSource, VoiceQueue)
-	voice_arrival
+        IO.puts("v_a")
+        arrival(VoiceSource, VoiceQueue)
+        voice_arrival
+
       :data_arrival ->
-	IO.puts "d_a"
-	arrival(DataSource, DataQueue)
-	data_arrival
+        IO.puts("d_a")
+        arrival(DataSource, DataQueue)
+        data_arrival
+
       :voice_serve ->
-	IO.puts "v_s"
-	serve_start = max(voice_serve, time)
-	voice_serve(serve_start, VoiceQueue, Server)
-	serve_start
+        IO.puts("v_s")
+        serve_start = max(voice_serve, time)
+        voice_serve(serve_start, VoiceQueue, Server)
+        serve_start
+
       :data_serve ->
-	IO.puts "d_s"
-	serve_start = max(data_serve, time)
-	data_serve(serve_start, DataQueue, Server)
-	serve_start
+        IO.puts("d_s")
+        serve_start = max(data_serve, time)
+        data_serve(serve_start, DataQueue, Server)
+        serve_start
+
       :voice_departure ->
-	IO.puts "v_d"
-	{:serving, serve_end, :voice} = server_state
-	voice_departure(Server)
-	serve_end
+        IO.puts("v_d")
+        {:serving, serve_end, :voice} = server_state
+        voice_departure(Server)
+        serve_end
+
       :data_departure ->
-	IO.puts "d_d"
-	{:serving, serve_end, :data} = server_state
-	data_departure(Server)
-	serve_end
+        IO.puts("d_d")
+        {:serving, serve_end, :data} = server_state
+        data_departure(Server)
+        serve_end
+
       :interrupt_data ->
-	IO.puts "i_d"
-	interrupt_data(voice_serve)
-	voice_serve
+        IO.puts("i_d")
+        interrupt_data(voice_serve)
+        voice_serve
     end
     |> loop(preemptible)
   end
