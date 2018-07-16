@@ -1,43 +1,57 @@
 defmodule AverageNumberCalc do
   use GenServer
 
-  @z_value 1.645
-
+  @moduledoc """
+  Module feito para guardar e calcular media de
+  métricas de quantidade. que envolvem calculo de
+  area e divisão pelo tempo.
+  """
   defstruct(
-    partial_sum_area: 0,
-    partial_sum_squares: 0,
-    count: 0,
-    time: 0,
-    last_entry: 0
+    partial_sum_area: 0, #mantem a soma parcial das areas
+    partial_sum_squares: 0, #mantem a soma parcial ads areas ao quadrado
+    count: 0, #mantem a quantidade de medições que foram recebidas
+    time: 0, #matem o tempo total desde a primeira entrada
+    last_entry: 0 #mantem o tempo que foi adicionado a ultima entrada
   )
 
+  @doc """
+  Começa a thread
+  """
   def start_link(opts, gs_opts \\ []) do
     GenServer.start_link(__MODULE__, opts, gs_opts)
   end
 
+  @doc """
+  retorna o somátorio do tempo acumulado
+  """
   def get_time(server) do
     GenServer.call(server, :time)
   end
 
+  @doc """
+  retorna o somátorio do da área acumulada
+  """
   def get_partial_sum(server) do
     GenServer.call(server, :partial_sum)
   end
 
+  @doc """
+  retorna a media
+  """
   def get_mean(server) do
     GenServer.call(server, :mean)
   end
 
-  def get_std_deviation(server) do
-    GenServer.call(server, :std_deviation)
-  end
-
+  @doc """
+  funçao que serve para receber os dados
+  """
   def put_value(server, number, time) do
     GenServer.cast(server, {:value, number, time})
   end
 
   @impl true
   def init(time) do
-    {:ok, %AverageNumberCalc{time: time}}
+    {:ok, %AverageNumberCalc{last_entry: time}}
   end
 
   @impl true
@@ -55,15 +69,9 @@ defmodule AverageNumberCalc do
     {:reply, mean(struct), struct}
   end
 
-  @impl true
-  def handle_call(:std_deviation, _from, struct) do
-    {:reply, std_deviation(struct), struct}
-  end
-  #
-  # def handle_call(:interval, _from, struct) do
-  #   {:reply, interval(struct), struct}
-  # end
-  #
+  @doc """
+  Função que atualia os valores de verdade na struct do modulo
+  """
   @impl true
   def handle_cast({:value, number, time}, struct) do
     time_delta = time - struct.last_entry
@@ -77,14 +85,8 @@ defmodule AverageNumberCalc do
     }
     {:noreply, updated_struct}
   end
-  #
-  # defp interval(struct) do
-  #   bound = @z_value * (std_deviation(struct) / :math.sqrt(struct.count))
-  #   upper_bound = mean(struct) + bound
-  #   lower_bound = mean(struct) - bound
-  #   {lower_bound, upper_bound}
-  # end
-  #
+
+  #função privada que calcula a media
   defp mean(struct) do
     if struct.time === 0 do
       0
@@ -92,14 +94,5 @@ defmodule AverageNumberCalc do
     struct.partial_sum_area / struct.time
   end
 
-  defp std_deviation(struct) do
-    :math.sqrt(variance(struct))
-  end
-
-  defp variance(struct) do
-    partial_sum_squares = struct.partial_sum_squares / (struct.count - 1)
-    square_of_sum = :math.pow(struct.partial_sum_area, 2) / (struct.count * (struct.count - 1))
-    partial_sum_squares - square_of_sum
-  end
 end
 
