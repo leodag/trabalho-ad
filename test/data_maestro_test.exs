@@ -30,13 +30,19 @@ defmodule DataMaestroTest do
 
   test "media da fila de voz", %{pid: pid} do
     GenServer.cast(pid, {
-      :data_arrival, #tipo de evento
-      @packet,    #pacote
+      :data_arrival,#tipo de evento
+      @packet,      #pacote
       4,            #numero de pacotes na fila de voz
       0,            #numero de pacotes na fila de dados
       1             #tempo do sistema
     })
-    GenServer.cast(pid, {:voice_arrival, 0, 1, 0, 2})
+    GenServer.cast(pid, {
+      :data_arrival,#tipo de evento
+      @packet,      #pacote
+      1,            #numero de pacotes na fila de voz
+      0,            #numero de pacotes na fila de dados
+      2             #tempo do sistema
+    })
 
     ret = GenServer.call(pid, :voice_stats)
     assert ret.mean_number === 2.5
