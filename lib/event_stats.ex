@@ -1,4 +1,4 @@
-defmodule DataMaestro do
+defmodule EventStats do
   use GenServer
 
   @moduledoc """
@@ -66,7 +66,7 @@ defmodule DataMaestro do
         end
       )
 
-    {:ok, %DataMaestro{
+    {:ok, %EventStats{
       data_stats: data_stats, 
       voice_stats: voice_stats,
       interval_stats: interval_stats

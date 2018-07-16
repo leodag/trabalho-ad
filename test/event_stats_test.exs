@@ -1,4 +1,4 @@
-defmodule DataMaestroTest do
+defmodule EventStatsTest do
   use ExUnit.Case, async: true
 
   @packet %Packet{
@@ -15,11 +15,11 @@ defmodule DataMaestroTest do
 
   @voice_producers 30
   test "criar o maestro de dados" do
-    {:ok, _} = GenServer.start_link(DataMaestro, 0)
+    {:ok, _} = GenServer.start_link(EventStats, 0)
   end
 
   setup do
-    {:ok, pid} = GenServer.start_link(DataMaestro, 0)
+    {:ok, pid} = GenServer.start_link(EventStats, 0)
 
     {:ok, pid: pid}
   end
