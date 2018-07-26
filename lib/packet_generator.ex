@@ -1,6 +1,10 @@
 defmodule PacketGenerator do
   use GenServer
 
+  # a estrutura que mantém o estado deste processo
+  # ppf_time é a ppf dos intervalos de tempo entre os pacotes
+  # ppf_size é a ppf do tamanho do pacote
+  # reply é a próxima
   defstruct [:ppf_time, :ppf_size, :reply]
 
   # recebe duas ppf (inversa da cdf), uma para tamanho do pacote
@@ -35,7 +39,7 @@ defmodule PacketGenerator do
     ppf.(:rand.uniform())
   end
 
-  # gera uma chegada
+  # gera uma chegada (um pacote)
   defp generate_packet(ppf_time, ppf_size, prev_time) do
     %Packet{
       time: prev_time + generate_number(ppf_time),
@@ -44,6 +48,7 @@ defmodule PacketGenerator do
     }
   end
 
+  # retorna o próximo pacote
   def handle_call(:get_packet, from, state = %PacketGenerator{}) do
     GenServer.reply(from, state.reply)
 
@@ -55,10 +60,12 @@ defmodule PacketGenerator do
     {:noreply, %{state | reply: next}}
   end
 
+  # obtém o instante da chegada do próximo pacote
   def handle_call(:next_time, _from, state = %PacketGenerator{reply: next}) do
     {:reply, next.time, state}
   end
 
+  # atrasa o próximo pacote
   def handle_call({:delay, amount}, _from, state = %PacketGenerator{}) do
     # atrasamos a chegada do pacote
     next = %Packet{state.reply | time: state.reply.time + amount}
@@ -66,11 +73,22 @@ defmodule PacketGenerator do
   end
 end
 
+# Gerador de voz: atua como um "proxy" na frente de um gerador de pacotes, e a cada
+# pacote gerado avalia se deve iniciar um período de silêncio (gerando a distribuição
+# geométrica do número N de pacotes
 defmodule VoiceGenerator do
   use GenServer
 
+  # estrutura do estado do gerador:
+  # packet_gen: pid do gerador, que utilizamos para encaminhar os pedidos de pacotes
+  # ppf_delay: ppf do período de silêncio
+  # delay_chance: chance de iniciarmos um período de silêncio após um dado pacote
+  # generator_id: identificador do gerador
+  # first_in_period: instante do primeiro pacote após um período de silêncio
   defstruct [:packet_gen, :ppf_delay, :delay_chance, :generator_id, :first_in_period]
 
+  # inicia o processo. Argumentos que podem ser passados no array opts:
+  # generator_id: id do gerador de voz (geralmente, de 1 a 30)
   def start_link(opts, gs_opts \\ []) do
     GenServer.start_link(__MODULE__, opts, gs_opts)
   end
@@ -108,7 +126,9 @@ defmodule VoiceGenerator do
     ppf.(:rand.uniform())
   end
 
+  # atrasa o próximo pacote
   defp delay(packet_gen, ppf_delay) do
+    # gera o tempo pelo qual o pacote será atrasado
     amount = generate_number(ppf_delay)
     PacketGenerator.delay(packet_gen, amount)
   end
@@ -124,6 +144,7 @@ defmodule VoiceGenerator do
 
     {reply, state} =
       if :rand.uniform() < state.delay_chance do
+	# caso verdadeiro: vamos atrasar o pacote
         re = %{reply | last: true}
         delay(state.packet_gen, state.ppf_delay)
         {re, %{state | first_in_period: PacketGenerator.next_time(state.packet_gen)}}
@@ -139,6 +160,7 @@ defmodule VoiceGenerator do
   end
 end
 
+# instancia o PacketGenerator com os parâmetros do gerador de dados, para um dado rho
 defmodule DataGenerator do
   def start_link(opts, gs_opts \\ []) do
     # default: rho = 10% de 2Mbps
