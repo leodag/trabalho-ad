@@ -1,14 +1,12 @@
 defmodule Server2 do
   use GenServer
 
+  ##
+  ## API externa
+  ##
+
   def start_link(opts, gs_opts \\ []) do
     GenServer.start_link(__MODULE__, opts, gs_opts)
-  end
-
-  def init(opts) do
-    # 2 Mbps
-    bandwidth = Keyword.get(opts, :bandwidth, 2_000_000)
-    {:ok, {bandwidth, :empty}}
   end
 
   def begin_serve(server, serve_start, type, packet) do
@@ -27,6 +25,19 @@ defmodule Server2 do
     GenServer.call(server, :status)
   end
 
+  # inicializa o servidor, no estado :empty
+  def init(opts) do
+    # 2 Mbps
+    bandwidth = Keyword.get(opts, :bandwidth, 2_000_000)
+    {:ok, {bandwidth, :empty}}
+  end
+
+  ##
+  ## Callbacks do servidor
+  ##
+
+  # inicia um serviço: mantém o pacote no estado interno até algo causar o fim do seu serviço
+  # (seja uma interrupção ou a partida do pacote)
   def handle_call({:begin_serve, time, type, packet = %Packet{}}, _from, {bandwidth, :empty}) do
     serve_end = time + packet.size / bandwidth
 
@@ -37,6 +48,8 @@ defmodule Server2 do
     }
   end
 
+  # interrompe um serviço: só funciona caso haja algo em serviço (verificado pela assinatura da função).
+  # retorna o pacote com o tempo gasto no servidor incrementado até o instante da interrupção.
   def handle_call(
         {:interrupt_serve, time},
         _from,
@@ -49,6 +62,7 @@ defmodule Server2 do
     }
   end
 
+  # finaliza um serviço: retorna o pacote com o tempo gasto no servidor incrementado.
   def handle_call(
         :end_serve,
         _from,
@@ -61,10 +75,13 @@ defmodule Server2 do
     }
   end
 
+  # obtém o status quando o servidor está ocioso: retorna :empty
   def handle_call(:status, _from, state = {_bandwidth, :empty}) do
     {:reply, :empty, state}
   end
 
+  # obtém o status quando o servidor está ocupado: retorna o tempo que a partida ocorrerá caso
+  # não haja interrupção e o tipo do pacote.
   def handle_call(
         :status,
         _from,
@@ -73,6 +90,8 @@ defmodule Server2 do
     {:reply, {:serving, serve_end, type}, state}
   end
 
+  # função auxiliar privada (só pode ser utilizada neste módulo) que incrementa o tempo
+  # em serviço do pacote até o instante 'time'
   defp add_serve_time(packet, serve_start, time) do
     %{packet | time_on_server: packet.time_on_server + time - serve_start}
   end
