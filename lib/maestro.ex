@@ -3,7 +3,14 @@ defmodule Maestro do
     spawn_link(fn -> maestro(opts) end)
   end
 
+  # Opções que podem ser passadas:
+  # voice_generators: número de geradores de voz
+  # data_generators: número de geradores de dados
+  # preemptible: se será preemptível ou não
+  # bandwidth: largura de banda do servidor
+  # rho: percentual de utilização proveniente do tráfego de dados desejado
   def init(opts) do
+    # obtemos nossos parâmetros (padrão: rho = 0.1, 20 Mbps)
     voice_generator_count = Keyword.get(opts, :voice_generators, 30)
     data_generator_count = Keyword.get(opts, :data_generators, 1)
     preemptible = Keyword.get(opts, :preemptible, false)
@@ -36,20 +43,23 @@ defmodule Maestro do
 
     {:ok, _} = HeapPacketQueue.start_link([generators: data_generators], name: DataSource)
 
+    # Nossas filas de pacotes
     {:ok, _} = Queue.start_link([], name: VoiceQueue)
     {:ok, _} = Queue.start_link([], name: DataQueue)
 
+    # Nosso servidor
     {:ok, _} = Server2.start_link([bandwidth: bandwidth], name: Server)
 
+    # Servidor de estatísticas
     {:ok, _} = EventStats.start_link([voice_generators: voice_generator_count], name: EventStats)
 
     preemptible
   end
 
   def maestro(opts) do
-    components = init(opts)
+    preemptible = init(opts)
 
-    loop(0, components, 0)
+    do_events(0, preemptible, 1000)
   end
 
   # Retorna o menor valor de um vetor
@@ -130,14 +140,18 @@ defmodule Maestro do
     {next_time, next_event}
   end
 
-  def loop(time, preemptible, departures) when is_number(time) and is_boolean(preemptible) do
-    # IO.puts(
-    #   to_string(time)
-    #   <> " v_q:"
-    #   <> to_string(Queue.len(VoiceQueue))
-    #   <> " d_q:" <> to_string(Queue.len(DataQueue))
-    # )
+  def do_events(time, preemptible, 0) do
+    :ok
+  end
 
+  def do_events(time, preemptible, events) do
+    next_time = do_event(time, preemptible)
+
+    do_events(next_time, preemptible, events - 1)
+  end
+
+
+  def do_event(time, preemptible) when is_number(time) and is_boolean(preemptible) do
     voice_arrival = PacketGenerator.next_time(VoiceSource)
     data_arrival = PacketGenerator.next_time(DataSource)
 
@@ -146,22 +160,7 @@ defmodule Maestro do
 
     server_state = Server2.status(Server)
 
-    # IO.inspect(departures)
-    if departures === 1000 do
-      if EventStats.should_stop(EventStats) do
-        GenServer.stop(EventStats)
-        {:ok, _} = EventStats.start_link([voice_generators: 30], name: EventStats)
-      end
-    end
-
-    if departures === 2000 do
-      IO.inspect(EventStats.voice_stats(EventStats))
-      IO.inspect(EventStats.data_stats(EventStats))
-      IO.inspect(EventStats.voice_confidence_intervals(EventStats))
-      IO.inspect(EventStats.data_confidence_intervals(EventStats))
-      exit(:normal)
-    end
-
+    # Decide qual é o próximo que irá acontecer, e em qual instante
     {next_time, next_event} =
       next_event(
         time,
@@ -197,12 +196,10 @@ defmodule Maestro do
 
 	:data_departure ->
           #IO.puts("d_d")
-	  departures = departures + 1
           data_departure()
 
 	:interrupt_data ->
           #IO.puts("i_d")
-	  departures = departures + 1
           interrupt_data(next_time)
       end
 
@@ -218,11 +215,7 @@ defmodule Maestro do
       next_time
     )
 
-    #IO.inspect(EventStats.voice_stats(EventStats))
-    #IO.inspect(EventStats.data_stats(EventStats))
-    #IO.inspect(EventStats.voice_confidence_intervals(EventStats))
-
-    loop(next_time, preemptible, departures)
+    next_time
   end
 
   # chegada: obtém o pacote do gerador, e insere no final da fila
